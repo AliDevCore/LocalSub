@@ -2,6 +2,8 @@ name: Build & Release LocalSub (Windows x64)
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -27,19 +29,31 @@ jobs:
           # Read version from pyproject.toml
           $content = Get-Content "pyproject.toml" -Raw
           if ($content -match 'version\s*=\s*"([^"]+)"') {
-            $ver = $matches[1]
+            $baseVer = $matches[1]
           } else {
-            $ver = "1.0.0"
+            $baseVer = "1.0.0"
           }
           
-          # If triggered by a git tag, use that tag, otherwise use v<version>
+          # If triggered by a git tag, use that exact tag
           if ($env:GITHUB_REF -like "refs/tags/*") {
             $tag = $env:GITHUB_REF -replace "refs/tags/", ""
+            $ver = $tag -replace "^v", ""
           } else {
-            $tag = "v$ver"
+            # Triggered by push to main branch
+            # Check if tag v$baseVer exists locally or on remote
+            git fetch --tags --force
+            $existingTag = git tag -l "v$baseVer"
+            if ($existingTag) {
+              # If tag exists, generate unique release tag with GitHub run number
+              $tag = "v$baseVer.$env:GITHUB_RUN_NUMBER"
+              $ver = "$baseVer.$env:GITHUB_RUN_NUMBER"
+            } else {
+              $tag = "v$baseVer"
+              $ver = $baseVer
+            }
           }
           
-          Write-Host "Detected version: $ver, target release tag: $tag"
+          Write-Host "Resolved Version: $ver, Target Tag: $tag"
           "version=$ver" >> $env:GITHUB_OUTPUT
           "tag=$tag" >> $env:GITHUB_OUTPUT
 
@@ -68,7 +82,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt
+          python -m pip install -r requirements-dev.txt --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 
       - name: Run Test Suite
         shell: pwsh
