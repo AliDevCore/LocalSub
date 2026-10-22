@@ -1,0 +1,11 @@
+# LocalSub - Production Dependencies
+PySide6>=6.6.0
+faster-whisper>=1.0.0
+ctranslate2>=4.0.0
+transformers>=4.38.0
+sentencepiece>=0.2.0
+huggingface_hub>=0.20.0
+onnxruntime>=1.14.0
+av>=11.0.0
+numpy>=1.24.0
+pillow>=10.0.0

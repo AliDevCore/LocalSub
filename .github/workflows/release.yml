@@ -1,0 +1,111 @@
+name: Build & Release LocalSub (Windows x64)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Release Standalone Windows App
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Set up FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+        with:
+          ffmpeg-version: release
+        id: setup-ffmpeg
+
+      - name: Copy FFmpeg to project bin
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "bin" -Force | Out-Null
+          $ffmpegPath = (Get-Command ffmpeg).Source
+          Write-Host "Discovered FFmpeg at: $ffmpegPath"
+          Copy-Item $ffmpegPath -Destination "bin\ffmpeg.exe" -Force
+          Get-Item "bin\ffmpeg.exe"
+
+      - name: Install Python Dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Run Test Suite
+        shell: pwsh
+        run: |
+          python -m pytest -v
+
+      - name: Build Standalone Windows Executable & ZIP
+        shell: pwsh
+        run: |
+          python packaging/build_windows.py
+
+      - name: Verify Build Artifacts
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem "dist\LocalSub-*-windows-x64.zip"
+          if (-not $zip) {
+            Write-Error "Release ZIP was not found in dist/"
+            exit 1
+          }
+          Write-Host "Found release archive: $($zip.FullName) ($([math]::Round($zip.Length / 1MB, 2)) MB)"
+          Get-Content "dist\$($zip.Name).sha256"
+
+      - name: Upload Artifacts to Workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalSub-Windows-x64
+          path: |
+            dist/LocalSub-*-windows-x64.zip
+            dist/LocalSub-*-windows-x64.zip.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/LocalSub-*-windows-x64.zip
+            dist/LocalSub-*-windows-x64.zip.sha256
+          name: LocalSub ${{ github.ref_name }}
+          body: |
+            ## LocalSub ${{ github.ref_name }} - نرم‌افزار تولید و ترجمه محلی زیرنویس فیلم
+            
+            ### 📥 راهنمای استفاده و اجرای سریع:
+            1. فایل فشرده `LocalSub-v1.0.0-windows-x64.zip` پیوست‌شده در زیر را دانلود کنید.
+            2. آن را از حالت فشرده خارج (Extract) کنید.
+            3. روی `LocalSub.exe` دابل‌کلیک کنید تا برنامه باز شود.
+            
+            > **نکته مهم:** این برنامه کاملاً مستقل است و برای اجرا به هیچ پیش‌نیازی نظیر نصب پایتون، کارت گرافیک مجزا، یا اتصال اینترنت هنگام پردازش نیازی ندارد.
+            
+            ---
+            
+            ### 🚀 Quick Start (English):
+            1. Download `LocalSub-v1.0.0-windows-x64.zip` attached below.
+            2. Extract the archive to any folder on Windows 10/11 x64.
+            3. Double-click `LocalSub.exe` to start.
+            4. 100% private and offline inference on CPU. No GPU or Python installation needed.
+            
+            ---
+            
+            ### 🔐 بررسی اصالت فایل (SHA-256 Checksum):
+            هش اعتبارسنجی فایل فشرده در فایل پیوست `.sha256` موجود است.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

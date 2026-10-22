@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# PyInstaller
+*.manifest
+*.spec.bak
+
+# Testing & Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local data & models
+LocalSub/temp/
+LocalSub/models/
+LocalSub/logs/
+*.tmp
+*.wav
+*.log
+
+# Bundled binaries (downloaded during build/packaging)
+bin/ffmpeg.exe
+bin/*.exe
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
