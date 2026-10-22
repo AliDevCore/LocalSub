@@ -58,6 +58,14 @@ def build() -> None:
     print(f"Executable built successfully: {exe_file}")
 
     # Ensure icons and notices are copied to output directory
+    assets_src = PROJECT_ROOT / "assets"
+    if assets_src.is_dir():
+        for target_assets in [out_dir / "assets", out_dir / "_internal" / "assets"]:
+            target_assets.parent.mkdir(parents=True, exist_ok=True)
+            if target_assets.exists():
+                shutil.rmtree(target_assets)
+            shutil.copytree(assets_src, target_assets)
+
     for doc in ["LICENSE", "THIRD_PARTY_NOTICES.md", "README.md"]:
         doc_path = PROJECT_ROOT / doc
         if doc_path.is_file():

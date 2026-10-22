@@ -60,6 +60,17 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(850, 580)
         self.setAcceptDrops(True)
 
+        from app.core.config import get_asset_path
+        app_icon = QIcon()
+        ico_file = get_asset_path("app_icon.ico")
+        png_file = get_asset_path("app_icon.png")
+        if ico_file.is_file():
+            app_icon.addFile(str(ico_file))
+        if png_file.is_file():
+            app_icon.addFile(str(png_file))
+        if not app_icon.isNull():
+            self.setWindowIcon(app_icon)
+
         self.settings = AppSettings.load()
         self.model_manager = ModelManager()
         self.ffmpeg_service = FFmpegService(custom_path=self.settings.custom_ffmpeg_path or None)
@@ -72,7 +83,20 @@ class MainWindow(QMainWindow):
         self._current_worker: Optional[PipelineWorker] = None
         self._download_worker: Optional[ModelDownloadWorker] = None
 
+        self._set_window_icon()
         self._setup_ui()
+
+    def _set_window_icon(self) -> None:
+        from app.core.config import get_asset_path
+        app_icon = QIcon()
+        ico = get_asset_path("app_icon.ico")
+        png = get_asset_path("app_icon.png")
+        if ico.is_file():
+            app_icon.addFile(str(ico))
+        if png.is_file():
+            app_icon.addFile(str(png))
+        if not app_icon.isNull():
+            self.setWindowIcon(app_icon)
         self.setStyleSheet(APP_STYLESHEET)
 
         # Pre-check FFmpeg

@@ -80,19 +80,36 @@ def main() -> int:
     if hasattr(Qt.ApplicationAttribute, "AA_UseHighDpiPixmaps"):
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
 
+    # Configure Windows Application ID for proper taskbar and window title icon association
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("LocalSub.SubtitlingStudio.AI.1.0")
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setApplicationDisplayName(APP_TITLE)
     app.setApplicationVersion(APP_VERSION)
 
-    # Set icon
-    icon_path = Path(__file__).resolve().parent.parent / "assets" / "app_icon.png"
-    if icon_path.is_file():
-        app.setWindowIcon(QIcon(str(icon_path)))
+    # Set icon with multi-resolution formats
+    from app.core.config import get_asset_path
+
+    app_icon = QIcon()
+    ico_file = get_asset_path("app_icon.ico")
+    png_file = get_asset_path("app_icon.png")
+    if ico_file.is_file():
+        app_icon.addFile(str(ico_file))
+    if png_file.is_file():
+        app_icon.addFile(str(png_file))
+
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
 
     window = MainWindow()
-    if icon_path.is_file():
-        window.setWindowIcon(QIcon(str(icon_path)))
+    if not app_icon.isNull():
+        window.setWindowIcon(app_icon)
 
     # If input files were passed via CLI / file association
     if args.input_files:

@@ -112,27 +112,25 @@ jobs:
             dist/LocalSub-*-windows-x64.zip.sha256
           make_latest: true
           body: |
-            ## LocalSub ${{ steps.get_version.outputs.tag }} - نرم‌افزار تولید و ترجمه محلی زیرنویس فیلم
+            <div dir="rtl">
+
+            ## انتشار نگارش جدید لوکال‌ساب (LocalSub ${{ steps.get_version.outputs.tag }})
             
-            ### 📥 راهنمای استفاده و اجرای سریع:
-            1. فایل فشرده `LocalSub-v1.0.0-windows-x64.zip` پیوست‌شده در زیر را دانلود کنید.
-            2. آن را از حالت فشرده خارج (Extract) کنید.
-            3. روی `LocalSub.exe` دابل‌کلیک کنید تا برنامه باز شود.
-            
-            > **نکته مهم:** این برنامه کاملاً مستقل است و برای اجرا به هیچ پیش‌نیازی نظیر نصب پایتون، کارت گرافیک مجزا، یا اتصال اینترنت هنگام پردازش نیازی ندارد.
-            
+            نرم‌افزار مستقل و هوشمند استخراج و ترجمه کاملاً محلی زیرنویس ویدیویی برای ویندوز ۱۰ و ۱۱
+
+            ### 🚀 راهنمای دانلود و اجرای سریع (بدون نیاز به نصب):
+            1. فایل فشرده پیوست شده در بخش Assets با نام `LocalSub-${{ steps.get_version.outputs.tag }}-windows-x64.zip` را دانلود کنید.
+            2. بر روی فایل دانلود شده کلیک راست کرده و گزینه **Extract All** را انتخاب کنید.
+            3. وارد پوشه شده و فایل **`LocalSub.exe`** را با دابل‌کلیک اجرا کنید.
+
+            > 💡 **ویژگی مهم:** این نرم‌افزار کاملاً پرتابل (قابل حمل) و مستقل است. برای اجرای آن به هیچ‌گونه نصب پایتون، درایور، کتابخانه‌های جانبی یا کارت گرافیک اختصاصی نیازی ندارید و تمامی پردازش‌ها به‌صورت ۱۰۰٪ آفلاین بر روی پردازنده معمولی (CPU) شما اجرا می‌شوند.
+
             ---
-            
-            ### 🚀 Quick Start (English):
-            1. Download `LocalSub-v1.0.0-windows-x64.zip` attached below.
-            2. Extract the archive to any folder on Windows 10/11 x64.
-            3. Double-click `LocalSub.exe` to start.
-            4. 100% private and offline inference on CPU. No GPU or Python installation needed.
-            
-            ---
-            
-            ### 🔐 بررسی اصالت فایل (SHA-256 Checksum):
-            هش اعتبارسنجی فایل فشرده در فایل پیوست `.sha256` موجود است.
+
+            ### 🔐 بررسی اصالت و سلامت بسته اجرایی (SHA-256 Checksum):
+            کد هش اعتبارسنجی فایل فشرده در فایل پیوست `LocalSub-${{ steps.get_version.outputs.tag }}-windows-x64.zip.sha256` قرار دارد که می‌توانید پیش از اجرا، سلامت کامل فایل دانلود شده را با آن تایید نمایید.
+
+            </div>
           draft: false
           prerelease: false
         env:

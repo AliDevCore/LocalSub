@@ -69,6 +69,24 @@ def get_temp_dir() -> Path:
     return path
 
 
+def get_asset_path(filename: str) -> Path:
+    """Return the absolute path to an asset file in development or PyInstaller frozen mode."""
+    if getattr(sys, "frozen", False):
+        if hasattr(sys, "_MEIPASS"):
+            p = Path(sys._MEIPASS) / "assets" / filename
+            if p.is_file():
+                return p
+        exe_dir = Path(sys.executable).resolve().parent
+        for candidate in [
+            exe_dir / "_internal" / "assets" / filename,
+            exe_dir / "assets" / filename,
+        ]:
+            if candidate.is_file():
+                return candidate
+
+    return Path(__file__).resolve().parent.parent.parent / "assets" / filename
+
+
 @dataclass
 class AppSettings:
     """User preferences saved across application restarts."""
