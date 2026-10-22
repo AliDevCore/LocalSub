@@ -21,21 +21,17 @@ from app.services.model_manager import TRANSLATION_REGISTRY, ModelManager
 class PersianTextNormalizer:
     """Normalizes Persian characters, punctuation, and typography for clean subtitles."""
 
-    # Arabic to Persian character mappings
+    # Arabic to Persian character mappings (safe standard mappings only)
     CHAR_MAP = {
         "ي": "ی",
         "ك": "ک",
         "ى": "ی",
         "ة": "ه",
-        "ؤ": "و",
-        "إ": "ا",
-        "أ": "ا",
-        "آ": "آ",
     }
 
     @classmethod
     def normalize(cls, text: str) -> str:
-        """Apply character normalization and standard Persian punctuation."""
+        """Apply safe character normalization and Persian punctuation without corrupting URLs/Latin text."""
         if not text:
             return ""
 
@@ -43,12 +39,18 @@ class PersianTextNormalizer:
         for src, dst in cls.CHAR_MAP.items():
             text = text.replace(src, dst)
 
-        # Persian punctuation conversions
-        text = text.replace("?", "؟")
-        text = text.replace(";", "؛")
-        # Replace comma only if preceded or followed by Persian/Arabic characters or spaces
-        text = re.sub(r"([^\d]),", r"\1،", text)
-        text = re.sub(r",([^\d])", r"،\1", text)
+        # Apply Persian punctuation only if Persian text is present and avoid URLs
+        has_persian = bool(re.search(r"[\u0600-\u06FF]", text))
+        is_url = bool(re.search(r"https?://\S+", text))
+
+        if has_persian and not is_url:
+            # Replace question mark preceded by Persian letter or space
+            text = re.sub(r"([\u0600-\u06FF\s])\?", r"\1؟", text)
+            # Replace semicolon preceded by Persian letter or space
+            text = re.sub(r"([\u0600-\u06FF\s]);", r"\1؛", text)
+            # Replace comma only when adjacent to Persian letters
+            text = re.sub(r"([\u0600-\u06FF]),", r"\1،", text)
+            text = re.sub(r",([\u0600-\u06FF])", r"،\1", text)
 
         # Normalize whitespace
         text = re.sub(r"[ \t]+", " ", text)
@@ -104,10 +106,32 @@ class CTranslate2NLLBBackend(BaseTranslationBackend):
             inter_threads=1,
         )
 
-        # Load tokenizer - check local model directory first, fallback to HuggingFace
-        tok_dir = self.model_dir if (self.model_dir / "tokenizer_config.json").is_file() else "facebook/nllb-200-distilled-600M"
-        get_logger().info(f"Loading NLLB Tokenizer from '{tok_dir}'...")
-        self._tokenizer = AutoTokenizer.from_pretrained(str(tok_dir), src_lang="eng_Latn")
+        # Load tokenizer strictly offline from local model directory
+        get_logger().info(f"Loading NLLB Tokenizer offline from '{self.model_dir}'...")
+        try:
+            self._tokenizer = AutoTokenizer.from_pretrained(
+                str(self.model_dir),
+                src_lang="eng_Latn",
+                local_files_only=True,
+            )
+        except Exception as err:
+            sp_model = self.model_dir / "sentencepiece.bpe.model"
+            if sp_model.is_file():
+                try:
+                    from transformers import NllbTokenizer
+                    self._tokenizer = NllbTokenizer(
+                        vocab_file=str(sp_model),
+                        src_lang="eng_Latn",
+                    )
+                except Exception as sp_err:
+                    raise RuntimeError(
+                        f"Failed to load NLLB tokenizer offline from '{self.model_dir}': {sp_err}"
+                    ) from sp_err
+            else:
+                raise FileNotFoundError(
+                    f"NLLB model directory '{self.model_dir}' is missing required local tokenizer files "
+                    f"(sentencepiece.bpe.model or tokenizer.json). Offline translation requires these files. Error: {err}"
+                ) from err
 
     def translate_batch(
         self,

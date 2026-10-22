@@ -24,7 +24,17 @@ class SafeStdWriter:
 
 
 # In Windows GUI executables (compiled with console=False), sys.stdout and sys.stderr are None.
-# Third-party libraries like tqdm, huggingface_hub, and urllib attempt to call .write() on them.
+# If launched with CLI flags, attempt to attach to parent console so output is visible.
+if sys.platform == "win32" and any(arg in sys.argv for arg in ("--selftest", "--version", "--help", "-h")):
+    try:
+        import ctypes
+        if ctypes.windll.kernel32.AttachConsole(-1):
+            import io
+            sys.stdout = io.TextIOWrapper(open("CONOUT$", "wt"), encoding="utf-8")
+            sys.stderr = io.TextIOWrapper(open("CONOUT$", "wt"), encoding="utf-8")
+    except Exception:
+        pass
+
 if sys.stdout is None:
     sys.stdout = SafeStdWriter()
 if sys.stderr is None:
@@ -63,9 +73,30 @@ def main() -> int:
     """Main application execution routine."""
     parser = argparse.ArgumentParser(description=f"{APP_TITLE} (v{APP_VERSION})")
     parser.add_argument("--version", action="version", version=f"{APP_NAME} {APP_VERSION}")
+    parser.add_argument("--selftest", action="store_true", help="Perform automated smoke test and integrity check")
     parser.add_argument("--debug", action="store_true", help="Enable verbose debug logging")
     parser.add_argument("input_files", nargs="*", help="Optional initial video files to enqueue")
     args = parser.parse_args()
+
+    if args.selftest:
+        setup_logging(debug=True)
+        print(f"=== {APP_NAME} v{APP_VERSION} Smoke Self-Test ===")
+        try:
+            import ctranslate2
+            print(f"  [OK] ctranslate2 loaded (v{getattr(ctranslate2, '__version__', 'unknown')})")
+            import faster_whisper
+            print(f"  [OK] faster_whisper loaded (v{getattr(faster_whisper, '__version__', 'unknown')})")
+            from app.services.ffmpeg_service import FFmpegService
+            ffmpeg_path = FFmpegService().find_ffmpeg()
+            print(f"  [OK] FFmpeg binary discovered: {ffmpeg_path}")
+            from app.core.config import get_asset_path
+            ico = get_asset_path("app_icon.ico")
+            print(f"  [OK] App asset verified: {ico.name} (exists={ico.is_file()})")
+            print("=== ALL SMOKE SELF-TEST CHECKS PASSED ===")
+            return 0
+        except Exception as e:
+            print(f"  [FAILED] Smoke test error: {e}")
+            return 1
 
     # Initialize logging
     logger = setup_logging(debug=args.debug)

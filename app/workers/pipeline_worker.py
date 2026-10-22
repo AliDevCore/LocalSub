@@ -6,6 +6,7 @@ UI responsiveness, real-time progress events, and responsive cancellation.
 
 from __future__ import annotations
 
+import copy
 import time
 from typing import List, Optional
 
@@ -40,7 +41,7 @@ class PipelineWorker(QThread):
     ):
         super().__init__(parent)
         self.queue_items = queue_items
-        self.settings = settings
+        self.settings = copy.deepcopy(settings)
         self.pipeline = pipeline or SubtitlePipeline()
         self.signals = PipelineWorkerSignals()
         self._is_cancelled = False
@@ -61,54 +62,60 @@ class PipelineWorker(QThread):
 
         get_logger().info(f"PipelineWorker started with {total} items.")
 
-        for idx, item in enumerate(self.queue_items):
-            if self._is_cancelled:
-                get_logger().info("Pipeline loop detected cancellation before processing next item.")
-                item.status = ProcessingStatus.CANCELLED
-                item.current_step = "Cancelled"
-                self.signals.item_finished.emit(item.id, False, "Cancelled by user")
-                break
+        try:
+            for idx, item in enumerate(self.queue_items):
+                if self._is_cancelled:
+                    get_logger().info("Pipeline loop detected cancellation before processing next item.")
+                    item.status = ProcessingStatus.CANCELLED
+                    item.current_step = "Cancelled"
+                    self.signals.item_finished.emit(item.id, False, "Cancelled by user")
+                    break
 
-            # Skip items that are already completed
-            if item.status == ProcessingStatus.COMPLETED:
-                success_count += 1
+                # Skip items that are already completed
+                if item.status == ProcessingStatus.COMPLETED:
+                    success_count += 1
+                    self.signals.queue_progress.emit(idx + 1, total)
+                    continue
+
+                self.signals.item_started.emit(item.id)
+
+                def on_progress(it: FileQueueItem, step: str, pct: float) -> None:
+                    self.signals.item_progress.emit(it.id, step, pct)
+
+                try:
+                    out_path = self.pipeline.process_item(
+                        item=item,
+                        settings=self.settings,
+                        progress_callback=on_progress,
+                        is_cancelled=self.is_cancelled,
+                    )
+                    success_count += 1
+                    msg = f"Saved: {out_path.name}" if out_path else "Completed (No speech detected)"
+                    self.signals.item_finished.emit(item.id, True, msg)
+                except InterruptedError:
+                    item.status = ProcessingStatus.CANCELLED
+                    item.current_step = "Cancelled"
+                    self.signals.item_finished.emit(item.id, False, "Processing cancelled")
+                    break
+                except Exception as e:
+                    failed_count += 1
+                    item.status = ProcessingStatus.FAILED
+                    item.error_message = str(e)
+                    self.signals.item_finished.emit(item.id, False, str(e))
+                    # Individual file failure does NOT abort remaining queue
+                    get_logger().error(f"Error processing item '{item.file_path.name}': {e}")
+
                 self.signals.queue_progress.emit(idx + 1, total)
-                continue
 
-            self.signals.item_started.emit(item.id)
+            if self._is_cancelled:
+                self.signals.cancelled.emit()
+            else:
+                self.signals.all_completed.emit(success_count, failed_count)
 
-            def on_progress(it: FileQueueItem, step: str, pct: float) -> None:
-                self.signals.item_progress.emit(it.id, step, pct)
-
-            try:
-                out_path = self.pipeline.process_item(
-                    item=item,
-                    settings=self.settings,
-                    progress_callback=on_progress,
-                    is_cancelled=self.is_cancelled,
-                )
-                success_count += 1
-                self.signals.item_finished.emit(item.id, True, f"Saved: {out_path.name}")
-            except InterruptedError:
-                item.status = ProcessingStatus.CANCELLED
-                item.current_step = "Cancelled"
-                self.signals.item_finished.emit(item.id, False, "Processing cancelled")
-                break
-            except Exception as e:
-                failed_count += 1
-                item.status = ProcessingStatus.FAILED
-                item.error_message = str(e)
-                self.signals.item_finished.emit(item.id, False, str(e))
-                # Individual file failure does NOT abort remaining queue
-                get_logger().error(f"Error processing item '{item.file_path.name}': {e}")
-
-            self.signals.queue_progress.emit(idx + 1, total)
-
-        if self._is_cancelled:
-            self.signals.cancelled.emit()
-        else:
-            self.signals.all_completed.emit(success_count, failed_count)
-
-        get_logger().info(
-            f"PipelineWorker finished: {success_count} succeeded, {failed_count} failed."
-        )
+            get_logger().info(
+                f"PipelineWorker finished: {success_count} succeeded, {failed_count} failed."
+            )
+        finally:
+            # Unload neural network models from memory upon queue completion or cancellation
+            get_logger().info("PipelineWorker cleanup: Releasing AI models from memory...")
+            self.pipeline.unload_models()

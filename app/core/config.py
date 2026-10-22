@@ -14,12 +14,32 @@ from typing import Any, Dict, List
 
 from app.core.types import TargetLanguage, TranslationModelType, WhisperModelSize
 
+def _resolve_version() -> str:
+    """Resolve version from package metadata or pyproject.toml."""
+    try:
+        from importlib.metadata import version
+        return version("LocalSub")
+    except Exception:
+        pass
+    try:
+        pyproject = Path(__file__).resolve().parent.parent.parent / "pyproject.toml"
+        if pyproject.is_file():
+            for line in pyproject.read_text(encoding="utf-8").splitlines():
+                stripped = line.strip()
+                if stripped.startswith("version"):
+                    parts = stripped.split("=", 1)
+                    if len(parts) == 2:
+                        return parts[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return "1.0.0"
+
 APP_NAME = "LocalSub"
 APP_TITLE = "LocalSub - AI Subtitle & Persian Translation Studio"
-APP_VERSION = "1.0.0"
+APP_VERSION = _resolve_version()
 APP_AUTHOR = "LocalSub Team"
 
-# Supported video extensions
+# Supported video extensions (Note: .ts excluded to avoid collisions with TypeScript source files)
 SUPPORTED_VIDEO_EXTENSIONS = {
     ".mp4",
     ".mkv",
@@ -29,7 +49,7 @@ SUPPORTED_VIDEO_EXTENSIONS = {
     ".m4v",
     ".webm",
     ".flv",
-    ".ts",
+    ".m2ts",
     ".mpeg",
     ".mpg",
 }
@@ -124,5 +144,8 @@ class AppSettings:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(asdict(self), f, indent=2, ensure_ascii=False)
         except Exception as e:
-            # Avoid crashing if save fails
-            pass
+            try:
+                from app.services.logging_service import get_logger
+                get_logger().error(f"Failed to persist settings to '{path}': {e}")
+            except Exception:
+                pass

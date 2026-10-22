@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QObject, QThread, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QDialog,
@@ -27,6 +27,48 @@ from PySide6.QtWidgets import (
 )
 
 from app.services.model_manager import ModelManager
+
+
+class ModelImportWorker(QThread):
+    """Background worker thread for extracting and validating imported model archives."""
+    progress = Signal(str, float)
+    finished = Signal(bool, str, str)  # success, out_dir, error_message
+
+    def __init__(
+        self,
+        manager: ModelManager,
+        category: str,
+        identifier: str,
+        source_path: Path,
+        is_zip: bool,
+        parent: Optional[QObject] = None,
+    ):
+        super().__init__(parent)
+        self.manager = manager
+        self.category = category
+        self.identifier = identifier
+        self.source_path = source_path
+        self.is_zip = is_zip
+
+    def run(self) -> None:
+        try:
+            if self.is_zip:
+                out = self.manager.import_model_from_zip(
+                    category=self.category,
+                    identifier=self.identifier,
+                    zip_path=self.source_path,
+                    progress_callback=lambda msg, pct: self.progress.emit(msg, pct),
+                )
+            else:
+                out = self.manager.import_model_from_folder(
+                    category=self.category,
+                    identifier=self.identifier,
+                    folder_path=self.source_path,
+                    progress_callback=lambda msg, pct: self.progress.emit(msg, pct),
+                )
+            self.finished.emit(True, str(out), "")
+        except Exception as e:
+            self.finished.emit(False, "", str(e))
 
 
 class ModelImportDialog(QDialog):
@@ -157,17 +199,17 @@ class ModelImportDialog(QDialog):
         imp_btn_layout = QHBoxLayout()
         imp_btn_layout.setSpacing(12)
 
-        btn_zip = QPushButton("📦 انتخاب فایل ZIP مدل (Select ZIP)...")
-        btn_zip.setStyleSheet(
+        self.btn_zip = QPushButton("📦 انتخاب فایل ZIP مدل (Select ZIP)...")
+        self.btn_zip.setStyleSheet(
             "background-color: #059669; font-size: 13px; font-weight: bold; padding: 10px 18px; border-radius: 6px;"
         )
-        btn_zip.clicked.connect(self._on_select_zip)
-        imp_btn_layout.addWidget(btn_zip)
+        self.btn_zip.clicked.connect(self._on_select_zip)
+        imp_btn_layout.addWidget(self.btn_zip)
 
-        btn_folder = QPushButton("📁 یا انتخاب پوشه فایل‌های دانلودشده...")
-        btn_folder.setStyleSheet("background-color: #334155; padding: 10px 14px; border-radius: 6px;")
-        btn_folder.clicked.connect(self._on_select_folder)
-        imp_btn_layout.addWidget(btn_folder)
+        self.btn_folder = QPushButton("📁 یا انتخاب پوشه فایل‌های دانلودشده...")
+        self.btn_folder.setStyleSheet("background-color: #334155; padding: 10px 14px; border-radius: 6px;")
+        self.btn_folder.clicked.connect(self._on_select_folder)
+        imp_btn_layout.addWidget(self.btn_folder)
 
         imp_layout.addLayout(imp_btn_layout)
 
@@ -206,33 +248,7 @@ class ModelImportDialog(QDialog):
         if not zip_file:
             return
 
-        self.pbar.setVisible(True)
-        self.status_lbl.setVisible(True)
-        self.pbar.setValue(20)
-        self.status_lbl.setText("در حال استخراج و اعتبارسنجی فایل ZIP...")
-
-        try:
-            out_dir = self.model_manager.import_model_from_zip(
-                category=self.category,
-                identifier=self.identifier,
-                zip_path=Path(zip_file),
-                progress_callback=self._update_progress,
-            )
-            self.pbar.setValue(100)
-            QMessageBox.information(
-                self,
-                "نصب موفقیت‌آمیز مدل",
-                f"مدل با موفقیت استخراج و تأیید سلامت شد!\n\nمسیر ذخیره: {out_dir}\nاکنون مدل کاملاً آفلاین و آماده استفاده است.",
-            )
-            self.accept()
-        except Exception as e:
-            self.pbar.setVisible(False)
-            self.status_lbl.setVisible(False)
-            QMessageBox.critical(
-                self,
-                "خطا در وارد کردن مدل",
-                f"فایل زیپ انتخاب‌شده نامعتبر است یا فایل‌های ضروری مدل در آن موجود نیستند:\n\n{e}",
-            )
+        self._start_import_worker(source_path=Path(zip_file), is_zip=True)
 
     def _on_select_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(
@@ -243,32 +259,48 @@ class ModelImportDialog(QDialog):
         if not folder:
             return
 
+        self._start_import_worker(source_path=Path(folder), is_zip=False)
+
+    def _start_import_worker(self, source_path: Path, is_zip: bool) -> None:
         self.pbar.setVisible(True)
         self.status_lbl.setVisible(True)
-        self.pbar.setValue(20)
-        self.status_lbl.setText("در حال کپی و اعتبارسنجی فایل‌های مدل...")
+        self.pbar.setValue(10)
+        self.status_lbl.setText("در حال آماده‌سازی و استخراج در پس‌زمینه...")
+        self.btn_zip.setEnabled(False)
+        self.btn_folder.setEnabled(False)
 
-        try:
-            out_dir = self.model_manager.import_model_from_folder(
-                category=self.category,
-                identifier=self.identifier,
-                folder_path=Path(folder),
-                progress_callback=self._update_progress,
-            )
+        self._worker = ModelImportWorker(
+            manager=self.model_manager,
+            category=self.category,
+            identifier=self.identifier,
+            source_path=source_path,
+            is_zip=is_zip,
+            parent=self,
+        )
+        self._worker.progress.connect(self._update_progress)
+        self._worker.finished.connect(self._on_import_finished)
+        self._worker.start()
+
+    def _on_import_finished(self, success: bool, out_dir: str, error_msg: str) -> None:
+        self.btn_zip.setEnabled(True)
+        self.btn_folder.setEnabled(True)
+
+        if success:
             self.pbar.setValue(100)
+            self.status_lbl.setText("مدل با موفقیت نصب شد!")
             QMessageBox.information(
                 self,
                 "نصب موفقیت‌آمیز مدل",
-                f"مدل با موفقیت در پوشه نرم‌افزار قرار گرفت و آماده استفاده است!\n\nمسیر ذخیره: {out_dir}",
+                f"مدل با موفقیت استخراج، اعتبارسنجی و تأیید سلامت شد!\n\nمسیر ذخیره: {out_dir}\nاکنون مدل کاملاً آفلاین و آماده استفاده است.",
             )
             self.accept()
-        except Exception as e:
+        else:
             self.pbar.setVisible(False)
             self.status_lbl.setVisible(False)
             QMessageBox.critical(
                 self,
-                "خطا در کپی مدل",
-                f"پوشه انتخاب‌شده فاقد فایل‌های ضروری مدل است:\n\n{e}",
+                "خطا در وارد کردن مدل",
+                f"فایل یا پوشه انتخاب‌شده نامعتبر است یا فایل‌های ضروری مدل در آن موجود نیستند:\n\n{error_msg}",
             )
 
     def _update_progress(self, message: str, pct: float) -> None:

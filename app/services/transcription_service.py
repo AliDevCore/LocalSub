@@ -117,16 +117,28 @@ class TranscriptionService:
         if progress_callback:
             progress_callback("Transcribing speech with faster-whisper...", 5.0)
 
-        # Transcribe with language locked to English
+        # Transcribe with language locked to English and hallucination controls
         segments_generator, info = model.transcribe(
             str(audio_path),
             language="en",
             task="transcribe",
             beam_size=5,
-            word_timestamps=True,
+            word_timestamps=False,  # High inference speed without word-level overhead
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=500),
+            condition_on_previous_text=False,  # Prevents repetition / hallucination loops
+            no_speech_threshold=0.6,
+            compression_ratio_threshold=2.4,
+            log_prob_threshold=-1.0,
         )
+
+        # Check detected language confidence
+        detected_lang = getattr(info, "language", "en")
+        lang_prob = getattr(info, "language_probability", 1.0)
+        if detected_lang != "en" and lang_prob > 0.6:
+            get_logger().warning(
+                f"Audio in '{audio_path.name}' may not be English! Detected: '{detected_lang}' (confidence: {lang_prob:.1%})."
+            )
 
         audio_duration = duration_seconds or getattr(info, "duration", 0.0) or 1.0
 

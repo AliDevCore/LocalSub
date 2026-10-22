@@ -153,7 +153,7 @@ class MainWindow(QMainWindow):
         self.edit_output_dir = QLineEdit()
         self.edit_output_dir.setPlaceholderText("Leave empty to save next to video file")
         self.edit_output_dir.setText(self.settings.last_output_dir)
-        self.edit_output_dir.textChanged.connect(self._on_output_dir_changed)
+        self.edit_output_dir.editingFinished.connect(self._on_output_dir_changed)
 
         btn_browse_out = QPushButton("Browse...")
         btn_browse_out.clicked.connect(self._browse_output_dir)
@@ -189,23 +189,23 @@ class MainWindow(QMainWindow):
         queue_layout.setSpacing(10)
 
         queue_btn_layout = QHBoxLayout()
-        btn_add_files = QPushButton("Add Video Files...")
-        btn_add_files.setObjectName("PrimaryButton")
-        btn_add_files.clicked.connect(self._browse_video_files)
+        self.btn_add_files = QPushButton("Add Video Files...")
+        self.btn_add_files.setObjectName("PrimaryButton")
+        self.btn_add_files.clicked.connect(self._browse_video_files)
 
-        btn_add_folder = QPushButton("Add Folder...")
-        btn_add_folder.clicked.connect(self._browse_video_folder)
+        self.btn_add_folder = QPushButton("Add Folder...")
+        self.btn_add_folder.clicked.connect(self._browse_video_folder)
 
-        btn_remove = QPushButton("Remove Selected")
-        btn_remove.clicked.connect(self._remove_selected_file)
+        self.btn_remove = QPushButton("Remove Selected")
+        self.btn_remove.clicked.connect(self._remove_selected_file)
 
-        btn_clear = QPushButton("Clear All")
-        btn_clear.clicked.connect(self._clear_queue)
+        self.btn_clear = QPushButton("Clear All")
+        self.btn_clear.clicked.connect(self._clear_queue)
 
-        queue_btn_layout.addWidget(btn_add_files)
-        queue_btn_layout.addWidget(btn_add_folder)
-        queue_btn_layout.addWidget(btn_remove)
-        queue_btn_layout.addWidget(btn_clear)
+        queue_btn_layout.addWidget(self.btn_add_files)
+        queue_btn_layout.addWidget(self.btn_add_folder)
+        queue_btn_layout.addWidget(self.btn_remove)
+        queue_btn_layout.addWidget(self.btn_clear)
         queue_btn_layout.addStretch()
 
         self.lbl_queue_count = QLabel("0 files in queue")
@@ -341,14 +341,25 @@ class MainWindow(QMainWindow):
         self.lbl_queue_count.setText(f"{len(self.queue_items)} files in queue")
         get_logger().info(f"Added {added_count} video files to queue. Total: {len(self.queue_items)}")
 
-    def _compute_srt_path(self, video_path: Path) -> Path:
-        """Compute output SRT path according to target language and output settings."""
+    def _compute_srt_path(self, video_path: Path, existing_targets: Optional[set] = None) -> Path:
+        """Compute unique output SRT path according to target language and output settings."""
         lang_suffix = ".fa.srt" if self.settings.target_language == TargetLanguage.PERSIAN.value else ".en.srt"
-        base_name = f"{video_path.stem}{lang_suffix}"
+        base_dir = (
+            Path(self.settings.last_output_dir)
+            if self.settings.last_output_dir and Path(self.settings.last_output_dir).is_dir()
+            else video_path.parent
+        )
 
-        if self.settings.last_output_dir and Path(self.settings.last_output_dir).is_dir():
-            return Path(self.settings.last_output_dir) / base_name
-        return video_path.parent / base_name
+        candidate = base_dir / f"{video_path.stem}{lang_suffix}"
+        if existing_targets is None:
+            existing_targets = {it.output_srt_path for it in self.queue_items}
+
+        counter = 2
+        while candidate in existing_targets:
+            candidate = base_dir / f"{video_path.stem}_{counter}{lang_suffix}"
+            counter += 1
+
+        return candidate
 
     def _remove_selected_file(self) -> None:
         self.table_queue.remove_selected_item()
@@ -377,9 +388,11 @@ class MainWindow(QMainWindow):
         )
         if dir_path:
             self.edit_output_dir.setText(dir_path)
+            self._on_output_dir_changed()
 
-    def _on_output_dir_changed(self, text: str) -> None:
-        self.settings.last_output_dir = text.strip()
+    def _on_output_dir_changed(self) -> None:
+        text = self.edit_output_dir.text().strip()
+        self.settings.last_output_dir = text
         self.settings.save()
         # Update output paths in queue
         self._update_all_output_paths()
@@ -397,8 +410,10 @@ class MainWindow(QMainWindow):
         self._update_all_output_paths()
 
     def _update_all_output_paths(self) -> None:
+        assigned_targets = set()
         for it in self.queue_items:
-            it.output_srt_path = self._compute_srt_path(it.file_path)
+            it.output_srt_path = self._compute_srt_path(it.file_path, existing_targets=assigned_targets)
+            assigned_targets.add(it.output_srt_path)
             # Update table widget display
             row = self.table_queue._find_row_by_id(it.id)
             if row is not None:
@@ -435,7 +450,21 @@ class MainWindow(QMainWindow):
         if success:
             QMessageBox.information(self, "Download Complete", message)
         else:
-            QMessageBox.critical(self, "Download Failed", message)
+            reply = QMessageBox.question(
+                self,
+                "خطا در دانلود خودکار مدل",
+                f"{message}\n\nآیا مایلید پنجره دریافت لینک دانلود مستقیم و وارد کردن فایل زیپ مدل را باز کنید؟",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                from app.ui.components.model_import_dialog import ModelImportDialog
+                category = getattr(self._download_worker, "model_type", "whisper")
+                identifier = getattr(self._download_worker, "model_identifier", "small")
+                dlg = ModelImportDialog(category, identifier, self.model_manager, self)
+                dlg.exec()
+                self.model_selector.refresh_status()
+                self._on_settings_changed()
 
     # --------------------------------------------------------------------------
     # Processing Pipeline Execution
@@ -497,6 +526,7 @@ class MainWindow(QMainWindow):
         # Toggle UI state
         self.btn_start.setEnabled(False)
         self.btn_cancel.setEnabled(True)
+        self._set_controls_enabled(False)
         self.total_pbar.setValue(0)
         self.total_pbar.setFormat("Processing queue: 0 / %m")
 
@@ -513,6 +543,45 @@ class MainWindow(QMainWindow):
         self._current_worker.signals.all_completed.connect(self._on_all_completed)
         self._current_worker.signals.cancelled.connect(self._on_pipeline_cancelled)
         self._current_worker.start()
+
+    def _set_controls_enabled(self, enabled: bool) -> None:
+        """Lock or unlock interactive controls while background worker is executing."""
+        self.btn_add_files.setEnabled(enabled)
+        self.btn_add_folder.setEnabled(enabled)
+        self.btn_remove.setEnabled(enabled)
+        self.btn_clear.setEnabled(enabled)
+        self.table_queue.setEnabled(enabled)
+        self.model_selector.setEnabled(enabled)
+        self.edit_output_dir.setEnabled(enabled)
+        self.chk_save_en.setEnabled(enabled)
+        self.chk_overwrite.setEnabled(enabled)
+
+    def closeEvent(self, event) -> None:
+        """Handle window close event with graceful worker cancellation."""
+        is_worker_running = self._current_worker and self._current_worker.isRunning()
+        is_download_running = self._download_worker and self._download_worker.isRunning()
+
+        if is_worker_running or is_download_running:
+            action_desc = "پردازش زیرنویس ویدیوها" if is_worker_running else "دانلود مدل هوش مصنوعی"
+            reply = QMessageBox.question(
+                self,
+                "تأیید خروج",
+                f"عملیات {action_desc} در حال حاضر فعال است.\n\nآیا مطمئن هستید که می‌خواهید عملیات را متوقف کرده و پنجره را ببندید؟",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                if is_worker_running:
+                    self._current_worker.cancel()
+                    self._current_worker.wait(3000)
+                if is_download_running:
+                    self._download_worker.cancel()
+                    self._download_worker.wait(3000)
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
 
     def _cancel_processing(self) -> None:
         if self._current_worker and self._current_worker.isRunning():
@@ -534,6 +603,7 @@ class MainWindow(QMainWindow):
     def _on_all_completed(self, success_count: int, failed_count: int) -> None:
         self.btn_start.setEnabled(True)
         self.btn_cancel.setEnabled(False)
+        self._set_controls_enabled(True)
         self.total_pbar.setValue(100)
         self.total_pbar.setFormat(f"Finished: {success_count} succeeded, {failed_count} failed")
         self.model_selector.refresh_status()
@@ -547,6 +617,7 @@ class MainWindow(QMainWindow):
     def _on_pipeline_cancelled(self) -> None:
         self.btn_start.setEnabled(True)
         self.btn_cancel.setEnabled(False)
+        self._set_controls_enabled(True)
         self.total_pbar.setFormat("Processing was cancelled by user")
         QMessageBox.information(self, "Cancelled", "Processing was cancelled.")
 

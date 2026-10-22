@@ -94,12 +94,16 @@ class ModelSelectorWidget(QGroupBox):
         self.lbl_translation = QLabel("Translation Model (EN -> FA):")
         self.lbl_translation.setStyleSheet("font-weight: 600;")
         self.combo_translation = QComboBox()
-        for t_model in [TranslationModelType.NLLB_DISTILLED_600M, TranslationModelType.OPUS_MT_EN_FA]:
-            self.combo_translation.addItem(t_model.display_name, t_model.value)
+        # NLLB-200 is the official high-accuracy, lightweight INT8 quantized offline model
+        self.combo_translation.addItem(
+            TranslationModelType.NLLB_DISTILLED_600M.display_name,
+            TranslationModelType.NLLB_DISTILLED_600M.value,
+        )
+        self.combo_translation.setToolTip("Meta NLLB-200 (مجوز تحقیقاتی و غیرتجاری CC-BY-NC 4.0)")
 
-        t_idx = self.combo_translation.findData(self.settings.translation_model)
-        if t_idx >= 0:
-            self.combo_translation.setCurrentIndex(t_idx)
+        # Ensure active selection
+        self.combo_translation.setCurrentIndex(0)
+        self.settings.translation_model = TranslationModelType.NLLB_DISTILLED_600M.value
         self.combo_translation.currentIndexChanged.connect(self._on_translation_changed)
 
         self.badge_translation = QLabel("Checking...")
@@ -188,32 +192,12 @@ class ModelSelectorWidget(QGroupBox):
         self.settings_changed.emit()
 
     def _on_download_whisper_clicked(self) -> None:
-        from app.ui.components.model_import_dialog import ModelImportDialog
-
         curr_whisper = self.combo_whisper.currentData()
-        dlg = ModelImportDialog(
-            category="whisper",
-            identifier=curr_whisper,
-            model_manager=self.model_manager,
-            parent=self.window(),
-        )
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self.refresh_status()
-            self.settings_changed.emit()
+        self.download_requested.emit("whisper", curr_whisper)
 
     def _on_download_translation_clicked(self) -> None:
-        from app.ui.components.model_import_dialog import ModelImportDialog
-
         curr_trans = self.combo_translation.currentData()
-        dlg = ModelImportDialog(
-            category="translation",
-            identifier=curr_trans,
-            model_manager=self.model_manager,
-            parent=self.window(),
-        )
-        if dlg.exec() == QDialog.DialogCode.Accepted:
-            self.refresh_status()
-            self.settings_changed.emit()
+        self.download_requested.emit("translation", curr_trans)
 
     def show_download_progress(self, message: str, pct: float) -> None:
         self.download_status_lbl.setVisible(True)

@@ -2,8 +2,6 @@ name: Build & Release LocalSub (Windows x64)
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -81,6 +79,22 @@ jobs:
         shell: pwsh
         run: |
           python packaging/build_windows.py
+
+      - name: Smoke Test Compiled Binary
+        shell: pwsh
+        run: |
+          $exe = "dist\LocalSub\LocalSub.exe"
+          if (-not (Test-Path $exe)) {
+            Write-Error "LocalSub.exe was not created in dist/LocalSub/"
+            exit 1
+          }
+          Write-Host "Executing smoke self-test on standalone binary..."
+          & $exe --selftest
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Smoke test failed on compiled binary with code $LASTEXITCODE"
+            exit 1
+          }
+          Write-Host "Smoke test passed successfully!"
 
       - name: Verify Build Artifacts
         shell: pwsh

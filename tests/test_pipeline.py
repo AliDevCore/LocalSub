@@ -163,3 +163,20 @@ def test_batch_worker_fault_tolerance(temp_dir: Path, mock_pipeline: SubtitlePip
 
     assert item1.status == ProcessingStatus.FAILED
     assert item2.status == ProcessingStatus.COMPLETED
+
+
+def test_pipeline_no_speech_detected(temp_dir: Path, mock_pipeline: SubtitlePipeline, sample_settings: AppSettings):
+    """When speech engine returns 0 segments, no fake subtitles are created and status is completed with 0 segments."""
+    mock_pipeline.transcription_service.transcribe_audio.return_value = []
+
+    video = temp_dir / "silent_video.mp4"
+    video.write_bytes(b"silent")
+    srt_out = temp_dir / "silent_video.en.srt"
+
+    item = FileQueueItem(id="silent", file_path=video, output_srt_path=srt_out)
+    result = mock_pipeline.process_item(item, sample_settings)
+
+    assert result is None
+    assert item.status == ProcessingStatus.COMPLETED
+    assert item.segments_count == 0
+    assert not srt_out.is_file()

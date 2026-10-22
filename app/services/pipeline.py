@@ -98,10 +98,11 @@ class SubtitlePipeline:
 
             item.duration_seconds = duration
 
-            # 3. Audio Extraction
+            # 3. Audio Extraction (Pass duration to avoid duplicate probe)
             report("Extracting audio with FFmpeg...", 10.0)
             extracted_wav = self.ffmpeg_service.extract_audio(
                 video_path=video_path,
+                duration_seconds=duration,
                 is_cancelled=is_cancelled,
                 progress_callback=lambda s: report(s, 15.0),
             )
@@ -131,16 +132,12 @@ class SubtitlePipeline:
             )
 
             if not segments:
-                get_logger().warning(f"No speech was detected in '{video_path.name}'.")
-                # Create an empty or notice SRT
-                segments = [
-                    SubtitleSegment(
-                        index=1,
-                        start=0.0,
-                        end=min(duration, 3.0),
-                        text="(No speech detected)" if not is_persian else "(گفتاری شناسایی نشد)",
-                    )
-                ]
+                get_logger().info(f"No speech was detected in '{video_path.name}'.")
+                item.segments_count = 0
+                item.status = ProcessingStatus.COMPLETED
+                item.progress = 100.0
+                item.current_step = "Completed (No speech detected)"
+                return None
 
             item.segments_count = len(segments)
 
@@ -227,3 +224,14 @@ class SubtitlePipeline:
                     get_logger().debug(f"Removed temporary audio file: {extracted_wav}")
                 except OSError:
                     pass
+
+    def unload_models(self) -> None:
+        """Unload Whisper and Translation neural networks from memory to reclaim RAM."""
+        try:
+            self.transcription_service.unload_model()
+        except Exception as e:
+            get_logger().debug(f"Error unloading speech model: {e}")
+        try:
+            self.translation_service.unload_backend()
+        except Exception as e:
+            get_logger().debug(f"Error unloading translation model: {e}")

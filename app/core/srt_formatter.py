@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import os
 import re
+import uuid
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -18,7 +19,6 @@ from app.core.types import SubtitleSegment
 def seconds_to_srt_time(seconds: float) -> str:
     """
     Convert floating-point seconds into standard SRT timestamp 'HH:MM:SS,mmm'.
-    
     Example: 83.456 -> '00:01:23,456'
     """
     if seconds < 0:
@@ -53,6 +53,53 @@ def srt_time_to_seconds(time_str: str) -> float:
     return hours * 3600 + minutes * 60 + secs + millis / 1000.0
 
 
+def wrap_subtitle_text(text: str, max_chars_per_line: int = 42, max_lines: int = 2) -> str:
+    """
+    Intelligently wrap subtitle dialogue at word boundaries to conform to broadcast standard
+    (~42 characters per line, max 2 lines).
+    """
+    if not text:
+        return ""
+
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    if not lines:
+        return ""
+
+    wrapped_lines: List[str] = []
+    for line in lines:
+        if len(line) <= max_chars_per_line:
+            wrapped_lines.append(line)
+        else:
+            # Split long line at balanced word boundary
+            words = line.split()
+            if len(words) <= 1:
+                wrapped_lines.append(line)
+                continue
+
+            # Find optimal split point near the middle
+            half_len = len(line) // 2
+            best_idx = 1
+            best_diff = float("inf")
+            curr_len = 0
+
+            for i, w in enumerate(words[:-1]):
+                curr_len += len(w) + (1 if i > 0 else 0)
+                diff = abs(curr_len - half_len)
+                if diff < best_diff:
+                    best_diff = diff
+                    best_idx = i + 1
+
+            line1 = " ".join(words[:best_idx])
+            line2 = " ".join(words[best_idx:])
+            wrapped_lines.append(line1)
+            wrapped_lines.append(line2)
+
+    # Restrict to max_lines if exceeded
+    if len(wrapped_lines) > max_lines:
+        return "\n".join(wrapped_lines[:max_lines])
+    return "\n".join(wrapped_lines)
+
+
 def sanitize_subtitle_text(text: str) -> str:
     """
     Clean dialogue text for subtitles: strip excess whitespace,
@@ -65,21 +112,36 @@ def sanitize_subtitle_text(text: str) -> str:
     return "\n".join(cleaned_lines).strip()
 
 
-def format_segments_to_srt(segments: List[SubtitleSegment]) -> str:
+def format_segments_to_srt(
+    segments: List[SubtitleSegment],
+    auto_wrap: bool = True,
+    max_chars_per_line: int = 42,
+    resolve_overlaps: bool = True,
+) -> str:
     """
     Format a list of SubtitleSegment instances into a standard SubRip string.
-    Ensures sequential numbering, valid timestamps, and skips empty segments.
+    Ensures sequential numbering, valid timestamps, resolved overlaps, and skips empty segments.
     """
+    sorted_segs = sorted(segments, key=lambda s: s.start)
     output_blocks: List[str] = []
     current_index = 1
 
-    for seg in sorted(segments, key=lambda s: s.start):
+    for i, seg in enumerate(sorted_segs):
         cleaned_text = sanitize_subtitle_text(seg.text)
         if not cleaned_text:
             continue
 
+        if auto_wrap:
+            cleaned_text = wrap_subtitle_text(cleaned_text, max_chars_per_line=max_chars_per_line)
+
         start_sec = max(0.0, float(seg.start))
-        end_sec = max(start_sec + 0.1, float(seg.end))
+        end_sec = max(start_sec + 0.8, float(seg.end))  # Enforce reasonable minimum duration of 0.8s
+
+        # Overlap resolution: ensure current segment ends before next starts
+        if resolve_overlaps and i + 1 < len(sorted_segs):
+            next_start = float(sorted_segs[i + 1].start)
+            if end_sec > next_start:
+                end_sec = max(start_sec + 0.4, next_start - 0.05)
 
         start_str = seconds_to_srt_time(start_sec)
         end_str = seconds_to_srt_time(end_sec)
@@ -178,33 +240,32 @@ def write_srt_atomic(
     segments: List[SubtitleSegment],
     destination_path: Path,
     overwrite: bool = True,
+    encoding: str = "utf-8-sig",
 ) -> Path:
     """
     Atomically write subtitle segments to destination path.
-    1. Write to temporary file with .tmp extension.
+    1. Write to unique temporary file (.tmp_{uuid}).
     2. Validate file integrity.
-    3. Atomically rename/replace to destination path.
+    3. Atomically replace destination path (using utf-8-sig to ensure TV/player compatibility).
     """
     destination_path = Path(destination_path)
     if destination_path.exists() and not overwrite:
         raise FileExistsError(f"Destination SRT already exists and overwrite is False: {destination_path}")
 
     destination_path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = destination_path.with_name(f"{destination_path.name}.tmp")
+    temp_path = destination_path.with_name(f".{destination_path.name}_{uuid.uuid4().hex[:8]}.tmp")
 
     try:
         srt_content = format_segments_to_srt(segments)
-        # Write with UTF-8
-        temp_path.write_text(srt_content, encoding="utf-8")
+        # Write with UTF-8 with BOM for maximum media player compatibility
+        temp_path.write_text(srt_content, encoding=encoding)
 
         # Validate temp file before replacing destination
         is_valid, error = validate_srt_file(temp_path)
         if not is_valid:
             raise ValueError(f"Generated SRT failed validation: {error}")
 
-        # Atomic replace
-        if destination_path.exists():
-            destination_path.unlink()
+        # Truly atomic replace
         temp_path.replace(destination_path)
         return destination_path
     finally:

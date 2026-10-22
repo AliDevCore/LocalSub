@@ -135,6 +135,8 @@ TRANSLATION_REGISTRY: Dict[str, Dict[str, Any]] = {
             ("sentencepiece.bpe.model (~4.8 MB)", "https://huggingface.co/JustFrederik/nllb-200-distilled-600M-ct2-int8/resolve/main/sentencepiece.bpe.model"),
             ("config.json", "https://huggingface.co/JustFrederik/nllb-200-distilled-600M-ct2-int8/resolve/main/config.json"),
             ("tokenizer.json (~17 MB)", "https://huggingface.co/JustFrederik/nllb-200-distilled-600M-ct2-int8/resolve/main/tokenizer.json"),
+            ("tokenizer_config.json", "https://huggingface.co/facebook/nllb-200-distilled-600M/resolve/main/tokenizer_config.json"),
+            ("special_tokens_map.json", "https://huggingface.co/facebook/nllb-200-distilled-600M/resolve/main/special_tokens_map.json"),
         ],
     },
     TranslationModelType.OPUS_MT_EN_FA.value: {
@@ -226,8 +228,6 @@ class ModelManager:
             snapshot_download(
                 repo_id=repo_id,
                 local_dir=str(target_dir),
-                local_dir_use_symlinks=False,
-                resume_download=True,
                 tqdm_class=tqdm_bridge,
             )
 
@@ -313,8 +313,6 @@ class ModelManager:
             snapshot_download(
                 repo_id=repo_id,
                 local_dir=str(target_dir),
-                local_dir_use_symlinks=False,
-                resume_download=True,
                 tqdm_class=tqdm_bridge,
             )
 
@@ -373,6 +371,14 @@ class ModelManager:
         with tempfile.TemporaryDirectory() as temp_unpack:
             temp_unpack_path = Path(temp_unpack)
             with zipfile.ZipFile(zip_path, "r") as zf:
+                # Zip safety limits (prevent zip bombs)
+                infolist = zf.infolist()
+                if len(infolist) > 500:
+                    raise ValueError(f"Zip archive contains too many files ({len(infolist)} > 500 limit).")
+                total_uncompressed = sum(info.file_size for info in infolist)
+                if total_uncompressed > 5 * 1024 * 1024 * 1024:  # 5 GB limit
+                    raise ValueError("Zip archive uncompressed size exceeds safe limit (5 GB).")
+
                 zf.extractall(temp_unpack_path)
 
             if progress_callback:
@@ -386,7 +392,32 @@ class ModelManager:
             if len(files_in_root) == 0 and len(candidates) == 1:
                 source_dir = candidates[0]
 
-            # Copy files to target_dir
+            # Normalize vocabulary files in staging first
+            self._normalize_model_files(source_dir)
+
+            # Validate files in staging directory BEFORE touching target_dir!
+            if category == "whisper":
+                spec = WHISPER_REGISTRY.get(identifier, {})
+                for req in spec.get("required_files", []):
+                    req_path = source_dir / req
+                    if not req_path.is_file() or req_path.stat().st_size == 0:
+                        if req == "vocabulary.txt" and (source_dir / "vocabulary.json").is_file():
+                            continue
+                        raise ValueError(
+                            f"The ZIP archive does not contain the required Whisper '{identifier}' file: '{req}'."
+                        )
+            elif category == "translation":
+                spec = TRANSLATION_REGISTRY.get(identifier, {})
+                for req in spec.get("required_files", []):
+                    req_path = source_dir / req
+                    if not req_path.is_file() or req_path.stat().st_size == 0:
+                        if req == "shared_vocabulary.txt" and (source_dir / "shared_vocabulary.json").is_file():
+                            continue
+                        raise ValueError(
+                            f"The ZIP archive does not contain the required translation '{identifier}' file: '{req}'."
+                        )
+
+            # Validation passed in staging: now safely populate target_dir
             target_dir.mkdir(parents=True, exist_ok=True)
             for item in source_dir.rglob("*"):
                 if item.is_file():
@@ -395,20 +426,8 @@ class ModelManager:
                     dest_file.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(item, dest_file)
 
-        # Normalize vocabulary names for whisper and translation
+        # Normalize final target directory
         self._normalize_model_files(target_dir)
-
-        # Validation
-        if category == "whisper":
-            if not self.is_whisper_model_ready(identifier):
-                raise ValueError(
-                    f"The ZIP archive does not contain the required Whisper '{identifier}' files (e.g. model.bin, config.json, vocabulary.txt)."
-                )
-        elif category == "translation":
-            if not self.is_translation_model_ready(identifier):
-                raise ValueError(
-                    f"The ZIP archive does not contain the required translation '{identifier}' files (e.g. model.bin, shared_vocabulary.txt)."
-                )
 
         if progress_callback:
             progress_callback("Model imported and verified successfully!", 100.0)
@@ -430,8 +449,26 @@ class ModelManager:
 
         if category == "whisper":
             target_dir = self.get_whisper_model_path(identifier)
+            spec = WHISPER_REGISTRY.get(identifier, {})
+            for req in spec.get("required_files", []):
+                req_path = folder_path / req
+                if not req_path.is_file() or req_path.stat().st_size == 0:
+                    if req == "vocabulary.txt" and (folder_path / "vocabulary.json").is_file():
+                        continue
+                    raise ValueError(
+                        f"Selected folder does not contain required Whisper '{identifier}' file: '{req}'."
+                    )
         elif category == "translation":
             target_dir = self.get_translation_model_path(identifier)
+            spec = TRANSLATION_REGISTRY.get(identifier, {})
+            for req in spec.get("required_files", []):
+                req_path = folder_path / req
+                if not req_path.is_file() or req_path.stat().st_size == 0:
+                    if req == "shared_vocabulary.txt" and (folder_path / "shared_vocabulary.json").is_file():
+                        continue
+                    raise ValueError(
+                        f"Selected folder does not contain required translation '{identifier}' file: '{req}'."
+                    )
         else:
             raise ValueError(f"Unknown category: {category}")
 
@@ -447,17 +484,6 @@ class ModelManager:
                 shutil.copy2(item, dest)
 
         self._normalize_model_files(target_dir)
-
-        if category == "whisper":
-            if not self.is_whisper_model_ready(identifier):
-                raise ValueError(
-                    f"Selected folder does not contain required Whisper '{identifier}' files (e.g. model.bin, config.json, vocabulary.txt)."
-                )
-        elif category == "translation":
-            if not self.is_translation_model_ready(identifier):
-                raise ValueError(
-                    f"Selected folder does not contain required translation '{identifier}' files (e.g. model.bin, shared_vocabulary.txt)."
-                )
 
         if progress_callback:
             progress_callback("Model imported and verified successfully!", 100.0)

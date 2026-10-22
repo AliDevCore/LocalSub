@@ -21,12 +21,19 @@ def test_persian_text_normalizer():
     normalized = PersianTextNormalizer.normalize(raw)
     assert normalized == "فیلم کمپانی"
 
+    # Verify Hamza in valid words is preserved (not stripped to و or ا)
+    assert PersianTextNormalizer.normalize("مؤمن و مسأله") == "مؤمن و مسأله"
+
     # Test punctuation: ? -> ؟, ; -> ؛
     punct_text = "آیا آماده هستید? بله; حتما!"
     norm_punct = PersianTextNormalizer.normalize(punct_text)
     assert "؟" in norm_punct
     assert "؛" in norm_punct
     assert "?" not in norm_punct
+
+    # Verify URLs and query parameters are NOT corrupted
+    url_text = "https://example.com/api?user=ali;id=10"
+    assert PersianTextNormalizer.normalize(url_text) == url_text
 
 
 def test_english_mode_skips_translation(sample_segments):

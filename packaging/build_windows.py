@@ -14,9 +14,14 @@ import zipfile
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from app.core.config import APP_VERSION
+
 DIST_DIR = PROJECT_ROOT / "dist"
 BUILD_DIR = PROJECT_ROOT / "build"
-VERSION = "1.0.0"
+VERSION = APP_VERSION
 ZIP_NAME = f"LocalSub-v{VERSION}-windows-x64.zip"
 
 

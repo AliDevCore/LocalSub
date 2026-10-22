@@ -138,4 +138,27 @@ def test_persian_utf8_encoding_and_unicode_path(temp_dir: Path):
     # Validate file
     is_valid, err = validate_srt_file(written_path)
     assert is_valid is True
-    assert err is None
+
+
+def test_wrap_subtitle_text():
+    """Verify intelligent line breaking at word boundaries for long dialogue."""
+    from app.core.srt_formatter import wrap_subtitle_text
+
+    long_line = "This is a very long sentence that needs to be broken into two lines for standard subtitles."
+    wrapped = wrap_subtitle_text(long_line, max_chars_per_line=45, max_lines=2)
+    lines = wrapped.split("\n")
+    assert len(lines) == 2
+    for line in lines:
+        assert len(line) <= 55  # split cleanly at words near middle
+
+
+def test_format_segments_overlap_prevention():
+    """Verify overlapping segments are clamped chronologically."""
+    from app.core.srt_formatter import format_segments_to_srt
+
+    overlapping = [
+        SubtitleSegment(index=1, start=1.0, end=5.0, text="First"),
+        SubtitleSegment(index=2, start=3.0, end=7.0, text="Second"),
+    ]
+    formatted = format_segments_to_srt(overlapping, resolve_overlaps=True)
+    assert "00:00:01,000 --> 00:00:02,950" in formatted

@@ -143,21 +143,25 @@ class FFmpegService:
         self,
         video_path: Path,
         output_wav_path: Optional[Path] = None,
+        duration_seconds: Optional[float] = None,
         is_cancelled: Optional[Callable[[], bool]] = None,
         progress_callback: Optional[Callable[[str], None]] = None,
     ) -> Path:
         """
         Extract audio track from video file into 16kHz 16-bit mono PCM WAV.
-        Supports cooperative cancellation.
+        Supports cooperative cancellation. Skips duplicate probe if duration_seconds is provided.
         """
         ffmpeg_bin = self.find_ffmpeg()
         video_path = Path(video_path).resolve()
 
-        is_valid, has_audio, duration = self.probe_media(video_path)
-        if not is_valid:
-            raise ValueError(f"Input file is not a recognized media container: {video_path}")
-        if not has_audio:
-            raise NoAudioStreamError(f"Media file contains no audio track: {video_path.name}")
+        if duration_seconds is not None and duration_seconds > 0:
+            duration = duration_seconds
+        else:
+            is_valid, has_audio, duration = self.probe_media(video_path)
+            if not is_valid:
+                raise ValueError(f"Input file is not a recognized media container: {video_path}")
+            if not has_audio:
+                raise NoAudioStreamError(f"Media file contains no audio track: {video_path.name}")
 
         if output_wav_path is None:
             # Create a unique temporary wav file in user temp dir
