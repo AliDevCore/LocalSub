@@ -7,7 +7,7 @@
 [![Python Version](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![GUI Framework](https://img.shields.io/badge/GUI-PySide6%20(LGPLv3)-41CD52.svg)](https://www.qt.io/)
 [![Speech Engine](https://img.shields.io/badge/Speech%20Engine-faster--whisper%20INT8-blueviolet.svg)](https://pypi.org/project/faster-whisper/)
-[![Translation](https://img.shields.io/badge/Translation-Meta%20NLLB--200%20INT8-orange.svg)](https://huggingface.co/facebook/nllb-200-distilled-600M)
+[![Translation](https://img.shields.io/badge/Translation-Google%20TranslateGemma%204B%20%2F%20NLLB-orange.svg)](https://huggingface.co/vwdvaan/translategemma-4b-it-Q4_K_M-GGUF)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2010%20%2F%2011%20x64-0078D6.svg)](https://microsoft.com)
 
@@ -90,8 +90,9 @@
 - **Small (~488 MB) [پیش‌فرض و پیشنهادی]**: تعادل فوق‌العاده میان دقت بالای کلمات و سرعت بهینه بر روی CPU.
 - **Medium (~1.5 GB)**: حداکثر دقت برای اصطلاحات پیچیده، فیلم‌هایی با همهمه، موسیقی و نویز پس‌زمینه.
 
-### ۲. مدل ترجمه انگلیسی به فارسی
-- **Meta NLLB-200 Distilled 600M (پیشنهادی)**: نسخه فشرده INT8 مدل پیشرفته ترجمه فیس‌بوک/متا با مصرف حدود ۸۵۰ مگابایت رم و گرامر روان فارسی.
+### ۲. مدل‌های ترجمه انگلیسی به فارسی
+- **Google TranslateGemma 4B [پیش‌فرض و پیشنهادی]**: مدل تخصصی و فوق‌العاده باکیفیت ترجمه شرکت گوگل (بر پایه Gemma 3 و تقطیر Gemini) با فرمت بهینه‌شده GGUF Q4_K_M (~۲.۴ گیگابایت). این مدل اصطلاحات روزمره، دیالوگ‌های عامیانه فیلم‌ها و دستور زبان طبیعی فارسی را با دقت بسیار بالا ترجمه می‌کند.
+- **Meta NLLB-200 Distilled 600M [سبک با رم کم]**: نسخه فشرده INT8 مدل چندزبانه متا با مصرف حدود ۸۵۰ مگابایت رم برای سیستم‌های با سخت‌افزار بسیار محدود.
 
 ---
 

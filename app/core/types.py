@@ -87,13 +87,15 @@ class WhisperModelSize(str, Enum):
 
 class TranslationModelType(str, Enum):
     """Supported local translation models."""
+    TRANSLATEGEMMA_4B = "translategemma-4b"
     NLLB_DISTILLED_600M = "nllb-200-distilled-600M"
     OPUS_MT_EN_FA = "opus-mt-en-fa"
 
     @property
     def display_name(self) -> str:
         mapping = {
-            TranslationModelType.NLLB_DISTILLED_600M: "Meta NLLB-200 Distilled 600M (Recommended, High Quality)",
+            TranslationModelType.TRANSLATEGEMMA_4B: "Google TranslateGemma 4B (Recommended, Fluent Persian)",
+            TranslationModelType.NLLB_DISTILLED_600M: "Meta NLLB-200 Distilled 600M (Standard, Low RAM)",
             TranslationModelType.OPUS_MT_EN_FA: "Helsinki Opus-MT en-fa (Lightweight, Apache 2.0)",
         }
         return mapping.get(self, self.value)
@@ -101,6 +103,7 @@ class TranslationModelType(str, Enum):
     @property
     def license_name(self) -> str:
         mapping = {
+            TranslationModelType.TRANSLATEGEMMA_4B: "Gemma Terms of Use (Open Weights)",
             TranslationModelType.NLLB_DISTILLED_600M: "CC-BY-NC-4.0 (Non-Commercial Research & Personal Use)",
             TranslationModelType.OPUS_MT_EN_FA: "Apache 2.0 (Permissive Open Source)",
         }

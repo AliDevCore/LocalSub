@@ -112,7 +112,7 @@ class AppSettings:
     """User preferences saved across application restarts."""
     target_language: str = TargetLanguage.PERSIAN.value
     whisper_model: str = WhisperModelSize.SMALL.value
-    translation_model: str = TranslationModelType.NLLB_DISTILLED_600M.value
+    translation_model: str = TranslationModelType.TRANSLATEGEMMA_4B.value
     last_output_dir: str = ""
     last_input_dir: str = ""
     cpu_threads: int = 4

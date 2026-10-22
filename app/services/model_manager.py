@@ -118,6 +118,22 @@ WHISPER_REGISTRY: Dict[str, Dict[str, Any]] = {
 
 # Registry of local translation models
 TRANSLATION_REGISTRY: Dict[str, Dict[str, Any]] = {
+    TranslationModelType.TRANSLATEGEMMA_4B.value: {
+        "repo_id": "vwdvaan/translategemma-4b-it-Q4_K_M-GGUF",
+        "type": "gguf",
+        "size_mb": 2400,
+        "required_files": ["translategemma-4b-it-q4_k_m.gguf"],
+        "license": "Gemma Open",
+        "license_description": "Google Gemma Open Weights Terms of Use.",
+        "supported_pairs": [("en", "fa")],
+        "page_url": "https://huggingface.co/vwdvaan/translategemma-4b-it-Q4_K_M-GGUF",
+        "direct_links": [
+            (
+                "translategemma-4b-it-q4_k_m.gguf (~2.4 GB)",
+                "https://huggingface.co/vwdvaan/translategemma-4b-it-Q4_K_M-GGUF/resolve/main/translategemma-4b-it-q4_k_m.gguf",
+            ),
+        ],
+    },
     TranslationModelType.NLLB_DISTILLED_600M.value: {
         "repo_id": "JustFrederik/nllb-200-distilled-600M-ct2-int8",
         "fallback_hf_repo": "facebook/nllb-200-distilled-600M",
@@ -267,6 +283,10 @@ class ModelManager:
         if not spec:
             return False
 
+        if spec.get("type") == "gguf":
+            gguf_files = list(model_path.glob("*.gguf"))
+            return len(gguf_files) > 0 and any(f.stat().st_size > 100 * 1024 * 1024 for f in gguf_files)
+
         for req in spec["required_files"]:
             file_path = model_path / req
             if not file_path.is_file() or file_path.stat().st_size == 0:
@@ -408,14 +428,21 @@ class ModelManager:
                         )
             elif category == "translation":
                 spec = TRANSLATION_REGISTRY.get(identifier, {})
-                for req in spec.get("required_files", []):
-                    req_path = source_dir / req
-                    if not req_path.is_file() or req_path.stat().st_size == 0:
-                        if req == "shared_vocabulary.txt" and (source_dir / "shared_vocabulary.json").is_file():
-                            continue
+                if spec.get("type") == "gguf":
+                    gguf_files = list(source_dir.glob("*.gguf"))
+                    if not gguf_files or not any(f.stat().st_size > 100 * 1024 * 1024 for f in gguf_files):
                         raise ValueError(
-                            f"The ZIP archive does not contain the required translation '{identifier}' file: '{req}'."
+                            f"The ZIP archive does not contain a valid GGUF model file (*.gguf) for '{identifier}'."
                         )
+                else:
+                    for req in spec.get("required_files", []):
+                        req_path = source_dir / req
+                        if not req_path.is_file() or req_path.stat().st_size == 0:
+                            if req == "shared_vocabulary.txt" and (source_dir / "shared_vocabulary.json").is_file():
+                                continue
+                            raise ValueError(
+                                f"The ZIP archive does not contain the required translation '{identifier}' file: '{req}'."
+                            )
 
             # Validation passed in staging: now safely populate target_dir
             target_dir.mkdir(parents=True, exist_ok=True)
@@ -461,14 +488,21 @@ class ModelManager:
         elif category == "translation":
             target_dir = self.get_translation_model_path(identifier)
             spec = TRANSLATION_REGISTRY.get(identifier, {})
-            for req in spec.get("required_files", []):
-                req_path = folder_path / req
-                if not req_path.is_file() or req_path.stat().st_size == 0:
-                    if req == "shared_vocabulary.txt" and (folder_path / "shared_vocabulary.json").is_file():
-                        continue
+            if spec.get("type") == "gguf":
+                gguf_files = list(folder_path.glob("*.gguf"))
+                if not gguf_files or not any(f.stat().st_size > 100 * 1024 * 1024 for f in gguf_files):
                     raise ValueError(
-                        f"Selected folder does not contain required translation '{identifier}' file: '{req}'."
+                        f"Selected folder does not contain a valid GGUF model file (*.gguf) for '{identifier}'."
                     )
+            else:
+                for req in spec.get("required_files", []):
+                    req_path = folder_path / req
+                    if not req_path.is_file() or req_path.stat().st_size == 0:
+                        if req == "shared_vocabulary.txt" and (folder_path / "shared_vocabulary.json").is_file():
+                            continue
+                        raise ValueError(
+                            f"Selected folder does not contain required translation '{identifier}' file: '{req}'."
+                        )
         else:
             raise ValueError(f"Unknown category: {category}")
 

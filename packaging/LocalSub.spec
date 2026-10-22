@@ -25,6 +25,11 @@ if ffmpeg_exe.is_file():
 # Collect faster_whisper, ctranslate2, transformers, and huggingface_hub assets
 datas += collect_data_files("faster_whisper")
 datas += collect_data_files("transformers")
+try:
+    datas += collect_data_files("llama_cpp")
+    binaries += collect_dynamic_libs("llama_cpp")
+except Exception:
+    pass
 
 hiddenimports = [
     "ctranslate2",
@@ -35,12 +40,17 @@ hiddenimports = [
     "huggingface_hub",
     "onnxruntime",
     "av",
+    "llama_cpp",
     "PySide6.QtCore",
     "PySide6.QtGui",
     "PySide6.QtWidgets",
 ]
 hiddenimports += collect_submodules("faster_whisper")
 hiddenimports += collect_submodules("ctranslate2")
+try:
+    hiddenimports += collect_submodules("llama_cpp")
+except Exception:
+    pass
 
 a = Analysis(
     [str(project_root / "app" / "main.py")],

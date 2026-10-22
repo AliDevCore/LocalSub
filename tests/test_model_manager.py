@@ -55,6 +55,25 @@ def test_translation_offline_readiness_check(temp_dir: Path):
     assert mgr.is_translation_model_ready(model_type) is True
 
 
+def test_translategemma_offline_readiness_check(temp_dir: Path):
+    """Verify is_translation_model_ready checks for presence of GGUF file for TranslateGemma."""
+    mgr = ModelManager(models_root=temp_dir)
+    model_type = TranslationModelType.TRANSLATEGEMMA_4B.value
+
+    # Initially missing
+    assert mgr.is_translation_model_ready(model_type) is False
+
+    # Create dummy GGUF file (> 100MB)
+    target_dir = mgr.get_translation_model_path(model_type)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    gguf_file = target_dir / "translategemma-4b-it-q4_k_m.gguf"
+    with open(gguf_file, "wb") as f:
+        f.seek(101 * 1024 * 1024)
+        f.write(b"\0")
+
+    assert mgr.is_translation_model_ready(model_type) is True
+
+
 def test_status_summary_english_vs_persian(temp_dir: Path):
     """Ensure in English mode, translation is marked as not required."""
     mgr = ModelManager(models_root=temp_dir)

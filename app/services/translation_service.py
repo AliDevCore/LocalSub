@@ -229,6 +229,89 @@ class TransformersSeq2SeqBackend(BaseTranslationBackend):
         gc.collect()
 
 
+class LlamaCppTranslationBackend(BaseTranslationBackend):
+    """
+    llama-cpp-python execution backend for GGUF models like Google TranslateGemma 4B.
+    Highly optimized 4-bit CPU inference with ~3-4GB RAM consumption.
+    """
+
+    def __init__(self, model_dir: Path, cpu_threads: int = 4):
+        self.model_dir = Path(model_dir)
+        self.cpu_threads = cpu_threads
+        self._llm = None
+        self._load()
+
+    def _load(self) -> None:
+        try:
+            from llama_cpp import Llama
+        except ImportError as e:
+            raise ImportError(
+                "llama-cpp-python is required for running GGUF translation models (TranslateGemma). "
+                "Install it using: pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu"
+            ) from e
+
+        gguf_files = list(self.model_dir.glob("*.gguf"))
+        if not gguf_files:
+            raise FileNotFoundError(f"No .gguf model file found in '{self.model_dir}'.")
+        model_file = gguf_files[0]
+
+        get_logger().info(
+            f"Loading GGUF Translation Model from '{model_file.name}' with {self.cpu_threads} CPU threads..."
+        )
+        self._llm = Llama(
+            model_path=str(model_file),
+            n_ctx=2048,
+            n_threads=self.cpu_threads,
+            verbose=False,
+        )
+
+    def translate_batch(
+        self,
+        texts: List[str],
+        source_lang: str = "en",
+        target_lang: str = "fa",
+    ) -> List[str]:
+        if not texts or self._llm is None:
+            return []
+
+        results: List[str] = []
+        system_instruction = (
+            "You are a professional English to Persian subtitle translator. "
+            "Translate each dialogue line naturally, accurately, and idiomatically into fluent Persian (fa-IR). "
+            "Output ONLY the direct Persian translation without any quotes, notes, or extra English words."
+        )
+
+        for text in texts:
+            cleaned = text.strip()
+            if not cleaned:
+                results.append("")
+                continue
+
+            try:
+                response = self._llm.create_chat_completion(
+                    messages=[
+                        {"role": "system", "content": system_instruction},
+                        {"role": "user", "content": f"Translate to Persian:\n{cleaned}"},
+                    ],
+                    temperature=0.1,
+                    max_tokens=256,
+                )
+                output = response["choices"][0]["message"]["content"]
+                output = output.strip().strip('"').strip("'")
+                results.append(output)
+            except Exception as e:
+                get_logger().warning(f"TranslateGemma translation error for '{cleaned}': {e}")
+                results.append(cleaned)
+
+        return results
+
+    def unload(self) -> None:
+        if self._llm is not None:
+            del self._llm
+            self._llm = None
+        gc.collect()
+
+
 class MockTranslationBackend(BaseTranslationBackend):
     """Mock backend used for unit tests to avoid internet/model download requirements."""
 
@@ -316,6 +399,8 @@ class TranslationService:
         try:
             if engine_type == "ctranslate2":
                 self._backend = CTranslate2NLLBBackend(model_dir=model_path, cpu_threads=cpu_threads)
+            elif engine_type == "gguf":
+                self._backend = LlamaCppTranslationBackend(model_dir=model_path, cpu_threads=cpu_threads)
             else:
                 self._backend = TransformersSeq2SeqBackend(model_dir_or_name=str(model_path), cpu_threads=cpu_threads)
             self._current_model_type = model_type

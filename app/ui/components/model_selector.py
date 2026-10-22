@@ -94,16 +94,20 @@ class ModelSelectorWidget(QGroupBox):
         self.lbl_translation = QLabel("Translation Model (EN -> FA):")
         self.lbl_translation.setStyleSheet("font-weight: 600;")
         self.combo_translation = QComboBox()
-        # NLLB-200 is the official high-accuracy, lightweight INT8 quantized offline model
-        self.combo_translation.addItem(
-            TranslationModelType.NLLB_DISTILLED_600M.display_name,
-            TranslationModelType.NLLB_DISTILLED_600M.value,
-        )
-        self.combo_translation.setToolTip("Meta NLLB-200 (مجوز تحقیقاتی و غیرتجاری CC-BY-NC 4.0)")
+        for m_type in [
+            TranslationModelType.TRANSLATEGEMMA_4B,
+            TranslationModelType.NLLB_DISTILLED_600M,
+        ]:
+            self.combo_translation.addItem(m_type.display_name, m_type.value)
 
-        # Ensure active selection
-        self.combo_translation.setCurrentIndex(0)
-        self.settings.translation_model = TranslationModelType.NLLB_DISTILLED_600M.value
+        saved_trans = self.settings.translation_model
+        idx_trans = self.combo_translation.findData(saved_trans)
+        if idx_trans >= 0:
+            self.combo_translation.setCurrentIndex(idx_trans)
+        else:
+            self.combo_translation.setCurrentIndex(0)
+            self.settings.translation_model = self.combo_translation.currentData()
+
         self.combo_translation.currentIndexChanged.connect(self._on_translation_changed)
 
         self.badge_translation = QLabel("Checking...")
@@ -155,6 +159,11 @@ class ModelSelectorWidget(QGroupBox):
         else:
             # Persian mode: Translation model required
             self.combo_translation.setEnabled(True)
+            if curr_trans == TranslationModelType.TRANSLATEGEMMA_4B.value:
+                self.combo_translation.setToolTip("Google TranslateGemma 4B (ترجمه فوق‌العاده روان، اصطلاحات محاوره‌ای و ساختار طبیعی فارسی)")
+            else:
+                self.combo_translation.setToolTip("Meta NLLB-200 (مدل استاندارد چندزبانه، سبک با مصرف رم کم)")
+
             t_ready = self.model_manager.is_translation_model_ready(curr_trans)
             if t_ready:
                 self.badge_translation.setText("Ready (Offline)")
