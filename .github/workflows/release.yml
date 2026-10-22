@@ -2,6 +2,8 @@ name: Build & Release LocalSub (Windows x64)
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -17,6 +19,31 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine Version and Tag
+        id: get_version
+        shell: pwsh
+        run: |
+          # Read version from pyproject.toml
+          $content = Get-Content "pyproject.toml" -Raw
+          if ($content -match 'version\s*=\s*"([^"]+)"') {
+            $ver = $matches[1]
+          } else {
+            $ver = "1.0.0"
+          }
+          
+          # If triggered by a git tag, use that tag, otherwise use v<version>
+          if ($env:GITHUB_REF -like "refs/tags/*") {
+            $tag = $env:GITHUB_REF -replace "refs/tags/", ""
+          } else {
+            $tag = "v$ver"
+          }
+          
+          Write-Host "Detected version: $ver, target release tag: $tag"
+          "version=$ver" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -76,15 +103,16 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.get_version.outputs.tag }}
+          name: LocalSub ${{ steps.get_version.outputs.tag }}
           files: |
             dist/LocalSub-*-windows-x64.zip
             dist/LocalSub-*-windows-x64.zip.sha256
-          name: LocalSub ${{ github.ref_name }}
+          make_latest: true
           body: |
-            ## LocalSub ${{ github.ref_name }} - نرم‌افزار تولید و ترجمه محلی زیرنویس فیلم
+            ## LocalSub ${{ steps.get_version.outputs.tag }} - نرم‌افزار تولید و ترجمه محلی زیرنویس فیلم
             
             ### 📥 راهنمای استفاده و اجرای سریع:
             1. فایل فشرده `LocalSub-v1.0.0-windows-x64.zip` پیوست‌شده در زیر را دانلود کنید.
