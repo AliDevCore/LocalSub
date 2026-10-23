@@ -138,6 +138,7 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         self.model_selector.download_requested.connect(self._on_download_requested)
+        self.model_selector.import_requested.connect(self._on_import_requested)
         self.model_selector.settings_changed.connect(self._on_settings_changed)
         root_layout.addWidget(self.model_selector)
 
@@ -465,6 +466,13 @@ class MainWindow(QMainWindow):
                 dlg.exec()
                 self.model_selector.refresh_status()
                 self._on_settings_changed()
+
+    def _on_import_requested(self, category: str, identifier: str) -> None:
+        from app.ui.components.model_import_dialog import ModelImportDialog
+        dlg = ModelImportDialog(category, identifier, self.model_manager, self)
+        dlg.exec()
+        self.model_selector.refresh_status()
+        self._on_settings_changed()
 
     # --------------------------------------------------------------------------
     # Processing Pipeline Execution

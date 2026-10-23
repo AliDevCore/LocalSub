@@ -53,10 +53,14 @@ def srt_time_to_seconds(time_str: str) -> float:
     return hours * 3600 + minutes * 60 + secs + millis / 1000.0
 
 
-def wrap_subtitle_text(text: str, max_chars_per_line: int = 42, max_lines: int = 2) -> str:
+def wrap_subtitle_text(
+    text: str,
+    max_chars_per_line: int = 42,
+    max_lines: Optional[int] = None,
+) -> str:
     """
     Intelligently wrap subtitle dialogue at word boundaries to conform to broadcast standard
-    (~42 characters per line, max 2 lines).
+    (~42 characters per line).
     """
     if not text:
         return ""
@@ -94,8 +98,7 @@ def wrap_subtitle_text(text: str, max_chars_per_line: int = 42, max_lines: int =
             wrapped_lines.append(line1)
             wrapped_lines.append(line2)
 
-    # Restrict to max_lines if exceeded
-    if len(wrapped_lines) > max_lines:
+    if max_lines and len(wrapped_lines) > max_lines:
         return "\n".join(wrapped_lines[:max_lines])
     return "\n".join(wrapped_lines)
 
@@ -116,11 +119,11 @@ def format_segments_to_srt(
     segments: List[SubtitleSegment],
     auto_wrap: bool = True,
     max_chars_per_line: int = 42,
-    resolve_overlaps: bool = True,
+    resolve_overlaps: bool = False,
 ) -> str:
     """
     Format a list of SubtitleSegment instances into a standard SubRip string.
-    Ensures sequential numbering, valid timestamps, resolved overlaps, and skips empty segments.
+    Maintains exact speech timestamps from Whisper, ensures sequential numbering, and skips empty segments.
     """
     sorted_segs = sorted(segments, key=lambda s: s.start)
     output_blocks: List[str] = []
@@ -135,13 +138,13 @@ def format_segments_to_srt(
             cleaned_text = wrap_subtitle_text(cleaned_text, max_chars_per_line=max_chars_per_line)
 
         start_sec = max(0.0, float(seg.start))
-        end_sec = max(start_sec + 0.8, float(seg.end))  # Enforce reasonable minimum duration of 0.8s
+        end_sec = max(start_sec + 0.1, float(seg.end))
 
-        # Overlap resolution: ensure current segment ends before next starts
+        # Only resolve overlaps if explicitly enabled
         if resolve_overlaps and i + 1 < len(sorted_segs):
             next_start = float(sorted_segs[i + 1].start)
             if end_sec > next_start:
-                end_sec = max(start_sec + 0.4, next_start - 0.05)
+                end_sec = max(start_sec + 0.05, next_start - 0.05)
 
         start_str = seconds_to_srt_time(start_sec)
         end_str = seconds_to_srt_time(end_sec)

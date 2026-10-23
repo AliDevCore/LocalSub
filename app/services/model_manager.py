@@ -524,6 +524,51 @@ class ModelManager:
 
         return target_dir
 
+    def import_model_from_file(
+        self,
+        category: str,
+        identifier: str,
+        file_path: Path,
+        progress_callback: Optional[Callable[[str, float], None]] = None,
+    ) -> Path:
+        """
+        Copy a single model file (such as a .gguf or .bin file) directly into the proper model directory.
+        """
+        if not file_path.is_file():
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        if category == "whisper":
+            target_dir = self.get_whisper_model_path(identifier)
+        elif category == "translation":
+            target_dir = self.get_translation_model_path(identifier)
+        else:
+            raise ValueError(f"Unknown category: {category}")
+
+        target_dir.mkdir(parents=True, exist_ok=True)
+        dest_file = target_dir / file_path.name
+
+        if progress_callback:
+            progress_callback(f"Copying '{file_path.name}'...", 30.0)
+
+        shutil.copy2(file_path, dest_file)
+
+        # Verification check
+        if category == "whisper":
+            if not self.is_whisper_model_ready(identifier):
+                raise ValueError(
+                    f"Model file '{file_path.name}' was copied, but Whisper '{identifier}' is still missing required files."
+                )
+        elif category == "translation":
+            if not self.is_translation_model_ready(identifier):
+                raise ValueError(
+                    f"Model file '{file_path.name}' was copied, but translation model '{identifier}' is still missing required files."
+                )
+
+        if progress_callback:
+            progress_callback("Model file imported and verified successfully!", 100.0)
+
+        return target_dir
+
     @staticmethod
     def _normalize_model_files(directory: Path) -> None:
         """

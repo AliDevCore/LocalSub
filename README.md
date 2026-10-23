@@ -23,7 +23,7 @@
 > تمام پردازش‌ها روی پردازنده معمولی سیستم (CPU) انجام می‌شوند و دیالوگ‌ها و فایل‌های صوتی شما به هیچ وجه از رایانه خارج نمی‌شوند. (دانلود اولیه وزن مدل‌ها از ریپازیتوری‌های رسمی Hugging Face انجام شده یا به صورت دستی با فایل ZIP وارد می‌شود).
 
 <p align="center">
-  <img width="900" alt="تصویر نرم افزار" src="https://github.com/user-attachments/assets/0bab292c-f5e9-4699-bbac-81a5113c9a82" />
+  <img width="1000" alt="تصویر نرم افزار" src="https://github.com/user-attachments/assets/0bab292c-f5e9-4699-bbac-81a5113c9a82" />
 </p>
 
 ---

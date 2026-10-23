@@ -54,6 +54,9 @@ class FFmpegService:
         # 2. PyInstaller bundle or script directory
         if getattr(sys, "frozen", False):
             # Running as bundled executable
+            exe_dir = Path(sys.executable).resolve().parent
+            candidates.append(exe_dir / "bin" / "ffmpeg.exe")
+            candidates.append(exe_dir / "ffmpeg.exe")
             base_dir = Path(getattr(sys, "_MEIPASS", sys.executable)).parent
             candidates.append(base_dir / "ffmpeg.exe")
             candidates.append(base_dir / "bin" / "ffmpeg.exe")

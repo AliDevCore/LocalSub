@@ -59,6 +59,13 @@ class ModelImportWorker(QThread):
                     zip_path=self.source_path,
                     progress_callback=lambda msg, pct: self.progress.emit(msg, pct),
                 )
+            elif self.source_path.is_file():
+                out = self.manager.import_model_from_file(
+                    category=self.category,
+                    identifier=self.identifier,
+                    file_path=self.source_path,
+                    progress_callback=lambda msg, pct: self.progress.emit(msg, pct),
+                )
             else:
                 out = self.manager.import_model_from_folder(
                     category=self.category,
@@ -199,7 +206,7 @@ class ModelImportDialog(QDialog):
         imp_btn_layout = QHBoxLayout()
         imp_btn_layout.setSpacing(12)
 
-        self.btn_zip = QPushButton("📦 انتخاب فایل ZIP مدل (Select ZIP)...")
+        self.btn_zip = QPushButton("📦 انتخاب فایل زیپ یا فایل مدل (.zip, .gguf, .bin)...")
         self.btn_zip.setStyleSheet(
             "background-color: #059669; font-size: 13px; font-weight: bold; padding: 10px 18px; border-radius: 6px;"
         )
@@ -239,16 +246,18 @@ class ModelImportDialog(QDialog):
         QMessageBox.information(self, "کپی شد", f"{notice}\n\nآدرس در کلیپ‌بورد قرار گرفت و می‌توانید در IDM یا مرورگر Paste کنید.")
 
     def _on_select_zip(self) -> None:
-        zip_file, _ = QFileDialog.getOpenFileName(
+        selected_file, _ = QFileDialog.getOpenFileName(
             self,
-            "انتخاب فایل زیپ حاوی مدل",
+            "انتخاب فایل زیپ یا فایل مدل",
             "",
-            "ZIP Files (*.zip);;All Files (*.*)",
+            "Model or Archive Files (*.zip *.gguf *.bin);;ZIP Archives (*.zip);;GGUF Models (*.gguf);;All Files (*.*)",
         )
-        if not zip_file:
+        if not selected_file:
             return
 
-        self._start_import_worker(source_path=Path(zip_file), is_zip=True)
+        p = Path(selected_file)
+        is_zip = p.suffix.lower() == ".zip"
+        self._start_import_worker(source_path=p, is_zip=is_zip)
 
     def _on_select_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(

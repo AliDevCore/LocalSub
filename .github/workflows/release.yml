@@ -103,9 +103,10 @@ jobs:
             exit 1
           }
           Write-Host "Executing smoke self-test on standalone binary..."
-          & $exe --selftest
-          if ($LASTEXITCODE -ne 0) {
-            Write-Error "Smoke test failed on compiled binary with code $LASTEXITCODE"
+          $proc = Start-Process -FilePath $exe -ArgumentList "--selftest" -Wait -PassThru -NoNewWindow
+          Write-Host "Smoke test process finished with exit code: $($proc.ExitCode)"
+          if ($proc.ExitCode -ne 0) {
+            Write-Error "Smoke test failed on compiled binary with code $($proc.ExitCode)"
             exit 1
           }
           Write-Host "Smoke test passed successfully!"
