@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -107,20 +107,27 @@ def get_asset_path(filename: str) -> Path:
     return Path(__file__).resolve().parent.parent.parent / "assets" / filename
 
 
+def get_default_cpu_threads() -> int:
+    """Return safe number of CPU threads avoiding thermal throttling on low-power / dual-core CPUs."""
+    count = os.cpu_count() or 4
+    return max(1, min(count // 2, 4))
+
+
 @dataclass
 class AppSettings:
     """User preferences saved across application restarts."""
     target_language: str = TargetLanguage.PERSIAN.value
-    whisper_model: str = WhisperModelSize.SMALL.value
+    whisper_model: str = WhisperModelSize.SMALL_EN.value
     translation_model: str = TranslationModelType.TRANSLATEGEMMA_4B.value
     last_output_dir: str = ""
     last_input_dir: str = ""
-    cpu_threads: int = 4
+    cpu_threads: int = field(default_factory=get_default_cpu_threads)
     compute_type: str = "int8"
     batch_size: int = 16
     overwrite_existing: bool = False
     save_original_english: bool = True
     custom_ffmpeg_path: str = ""
+    filter_filler_words: bool = True
 
     @classmethod
     def get_settings_file(cls) -> Path:

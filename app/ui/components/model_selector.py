@@ -72,7 +72,14 @@ class ModelSelectorWidget(QGroupBox):
         lbl_whisper = QLabel("Speech Recognition Model:")
         lbl_whisper.setStyleSheet("font-weight: 600;")
         self.combo_whisper = QComboBox()
-        for size in [WhisperModelSize.BASE, WhisperModelSize.SMALL, WhisperModelSize.MEDIUM]:
+        for size in [
+            WhisperModelSize.SMALL_EN,
+            WhisperModelSize.MEDIUM_EN,
+            WhisperModelSize.BASE_EN,
+            WhisperModelSize.SMALL,
+            WhisperModelSize.BASE,
+            WhisperModelSize.MEDIUM,
+        ]:
             self.combo_whisper.addItem(size.display_name, size.value)
 
         w_idx = self.combo_whisper.findData(self.settings.whisper_model)

@@ -62,27 +62,36 @@ class TargetLanguage(str, Enum):
 
 class WhisperModelSize(str, Enum):
     """faster-whisper model size on CPU."""
-    BASE = "base"
+    SMALL_EN = "small.en"
+    MEDIUM_EN = "medium.en"
+    BASE_EN = "base.en"
     SMALL = "small"
+    BASE = "base"
     MEDIUM = "medium"
 
     @property
     def display_name(self) -> str:
         mapping = {
-            WhisperModelSize.BASE: "Base (~145 MB, Fastest, Low RAM)",
-            WhisperModelSize.SMALL: "Small (~488 MB, Recommended, Balanced)",
-            WhisperModelSize.MEDIUM: "Medium (~1.5 GB, Highest Accuracy, Needs 4GB+ RAM)",
+            WhisperModelSize.SMALL_EN: "Small.en (~461 MB, Recommended English, High Accuracy)",
+            WhisperModelSize.MEDIUM_EN: "Medium.en (~1.45 GB, Highest Accuracy English)",
+            WhisperModelSize.BASE_EN: "Base.en (~141 MB, Fastest English)",
+            WhisperModelSize.SMALL: "Small (~488 MB, Multilingual, Balanced)",
+            WhisperModelSize.BASE: "Base (~145 MB, Multilingual, Fast)",
+            WhisperModelSize.MEDIUM: "Medium (~1.5 GB, Multilingual, Needs 4GB+ RAM)",
         }
         return mapping.get(self, self.value)
 
     @property
     def approx_size_mb(self) -> int:
         mapping = {
-            WhisperModelSize.BASE: 145,
+            WhisperModelSize.SMALL_EN: 461,
+            WhisperModelSize.MEDIUM_EN: 1457,
+            WhisperModelSize.BASE_EN: 141,
             WhisperModelSize.SMALL: 488,
+            WhisperModelSize.BASE: 145,
             WhisperModelSize.MEDIUM: 1530,
         }
-        return mapping.get(self, 488)
+        return mapping.get(self, 461)
 
 
 class TranslationModelType(str, Enum):

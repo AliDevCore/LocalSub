@@ -75,6 +75,45 @@ def create_tqdm_bridge(
 
 # Registry of faster-whisper models
 WHISPER_REGISTRY: Dict[str, Dict[str, Any]] = {
+    WhisperModelSize.SMALL_EN.value: {
+        "repo_id": "Systran/faster-whisper-small.en",
+        "size_mb": 461,
+        "required_files": ["model.bin", "config.json", "vocabulary.txt"],
+        "license": "MIT",
+        "page_url": "https://huggingface.co/Systran/faster-whisper-small.en/tree/main",
+        "direct_links": [
+            ("model.bin (~461 MB)", "https://huggingface.co/Systran/faster-whisper-small.en/resolve/main/model.bin"),
+            ("config.json", "https://huggingface.co/Systran/faster-whisper-small.en/resolve/main/config.json"),
+            ("vocabulary.txt", "https://huggingface.co/Systran/faster-whisper-small.en/resolve/main/vocabulary.txt"),
+            ("tokenizer.json", "https://huggingface.co/Systran/faster-whisper-small.en/resolve/main/tokenizer.json"),
+        ],
+    },
+    WhisperModelSize.MEDIUM_EN.value: {
+        "repo_id": "Systran/faster-whisper-medium.en",
+        "size_mb": 1457,
+        "required_files": ["model.bin", "config.json", "vocabulary.txt"],
+        "license": "MIT",
+        "page_url": "https://huggingface.co/Systran/faster-whisper-medium.en/tree/main",
+        "direct_links": [
+            ("model.bin (~1.45 GB)", "https://huggingface.co/Systran/faster-whisper-medium.en/resolve/main/model.bin"),
+            ("config.json", "https://huggingface.co/Systran/faster-whisper-medium.en/resolve/main/config.json"),
+            ("vocabulary.txt", "https://huggingface.co/Systran/faster-whisper-medium.en/resolve/main/vocabulary.txt"),
+            ("tokenizer.json", "https://huggingface.co/Systran/faster-whisper-medium.en/resolve/main/tokenizer.json"),
+        ],
+    },
+    WhisperModelSize.BASE_EN.value: {
+        "repo_id": "Systran/faster-whisper-base.en",
+        "size_mb": 141,
+        "required_files": ["model.bin", "config.json", "vocabulary.txt"],
+        "license": "MIT",
+        "page_url": "https://huggingface.co/Systran/faster-whisper-base.en/tree/main",
+        "direct_links": [
+            ("model.bin (~141 MB)", "https://huggingface.co/Systran/faster-whisper-base.en/resolve/main/model.bin"),
+            ("config.json", "https://huggingface.co/Systran/faster-whisper-base.en/resolve/main/config.json"),
+            ("vocabulary.txt", "https://huggingface.co/Systran/faster-whisper-base.en/resolve/main/vocabulary.txt"),
+            ("tokenizer.json", "https://huggingface.co/Systran/faster-whisper-base.en/resolve/main/tokenizer.json"),
+        ],
+    },
     WhisperModelSize.BASE.value: {
         "repo_id": "Systran/faster-whisper-base",
         "size_mb": 145,

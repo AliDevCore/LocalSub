@@ -131,6 +131,17 @@ class SubtitlePipeline:
                 is_cancelled=is_cancelled,
             )
 
+            # Apply filler words / vocalization filter if enabled
+            if getattr(settings, "filter_filler_words", True):
+                from app.core.filler_filter import filter_filler_segments
+                raw_count = len(segments)
+                segments = filter_filler_segments(segments)
+                dropped = raw_count - len(segments)
+                if dropped > 0:
+                    get_logger().info(
+                        f"Filtered out {dropped} filler/vocalization segments ({len(segments)} dialogue segments remaining)."
+                    )
+
             if not segments:
                 get_logger().info(f"No speech was detected in '{video_path.name}'.")
                 item.segments_count = 0

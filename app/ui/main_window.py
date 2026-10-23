@@ -167,7 +167,12 @@ class MainWindow(QMainWindow):
         chk_row = QHBoxLayout()
         chk_row.setSpacing(24)
 
-        self.chk_save_en = QCheckBox("ذخیره هم‌زمان زیرنویس انگلیسی در حالت فارسی (Also save English .en.srt)")
+        self.chk_filter_fillers = QCheckBox("فیلتر کلمات زائد")
+        self.chk_filter_fillers.setChecked(getattr(self.settings, "filter_filler_words", True))
+        self.chk_filter_fillers.setToolTip("حذف صداها و واژگان تکراری مانند oh, ah, yes, oh my god از متن و ترجمه")
+        self.chk_filter_fillers.toggled.connect(self._on_filter_fillers_toggled)
+
+        self.chk_save_en = QCheckBox("ذخیره هم‌زمان زیرنویس انگلیسی (Save companion .en.srt)")
         self.chk_save_en.setChecked(self.settings.save_original_english)
         self.chk_save_en.setToolTip("در صورت انتخاب زبان فارسی، زیرنویس اصلی انگلیسی نیز به صورت جداگانه در کنار فایل فارسی ذخیره می‌شود")
         self.chk_save_en.toggled.connect(self._on_save_en_toggled)
@@ -176,6 +181,7 @@ class MainWindow(QMainWindow):
         self.chk_overwrite.setChecked(self.settings.overwrite_existing)
         self.chk_overwrite.toggled.connect(self._on_overwrite_toggled)
 
+        chk_row.addWidget(self.chk_filter_fillers)
         chk_row.addWidget(self.chk_save_en)
         chk_row.addWidget(self.chk_overwrite)
         chk_row.addStretch()
@@ -397,6 +403,10 @@ class MainWindow(QMainWindow):
         self.settings.save()
         # Update output paths in queue
         self._update_all_output_paths()
+
+    def _on_filter_fillers_toggled(self, checked: bool) -> None:
+        self.settings.filter_filler_words = checked
+        self.settings.save()
 
     def _on_overwrite_toggled(self, checked: bool) -> None:
         self.settings.overwrite_existing = checked
