@@ -17,6 +17,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QDragEnterEvent, QDropEvent, QIcon
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -36,6 +37,7 @@ from app.core.config import (
     APP_VERSION,
     SUPPORTED_VIDEO_EXTENSIONS,
     AppSettings,
+    get_available_cpu_thread_options,
 )
 from app.core.types import FileQueueItem, ProcessingStatus, TargetLanguage
 from app.services.ffmpeg_service import FFmpegService
@@ -163,6 +165,30 @@ class MainWindow(QMainWindow):
         dir_row.addWidget(self.edit_output_dir, stretch=1)
         dir_row.addWidget(btn_browse_out)
         opts_layout.addLayout(dir_row)
+
+        threads_row = QHBoxLayout()
+        threads_row.setSpacing(12)
+        lbl_threads = QLabel("توان پردازشی (هسته‌های CPU):")
+        lbl_threads.setStyleSheet("font-weight: 600;")
+
+        self.combo_threads = QComboBox()
+        self.combo_threads.setToolTip("تعداد هسته‌های پردازنده اختصاص‌یافته به استخراج و ترجمه متن")
+        for count, label in get_available_cpu_thread_options():
+            self.combo_threads.addItem(label, count)
+
+        saved_threads = getattr(self.settings, "cpu_threads", os.cpu_count() or 4)
+        t_idx = self.combo_threads.findData(saved_threads)
+        if t_idx >= 0:
+            self.combo_threads.setCurrentIndex(t_idx)
+        else:
+            self.combo_threads.setCurrentIndex(0)
+            self.settings.cpu_threads = self.combo_threads.currentData()
+        self.combo_threads.currentIndexChanged.connect(self._on_threads_changed)
+
+        threads_row.addWidget(lbl_threads)
+        threads_row.addWidget(self.combo_threads)
+        threads_row.addStretch()
+        opts_layout.addLayout(threads_row)
 
         chk_row = QHBoxLayout()
         chk_row.setSpacing(24)
@@ -403,6 +429,12 @@ class MainWindow(QMainWindow):
         self.settings.save()
         # Update output paths in queue
         self._update_all_output_paths()
+
+    def _on_threads_changed(self, index: int) -> None:
+        val = self.combo_threads.itemData(index)
+        if val is not None:
+            self.settings.cpu_threads = int(val)
+            self.settings.save()
 
     def _on_filter_fillers_toggled(self, checked: bool) -> None:
         self.settings.filter_filler_words = checked

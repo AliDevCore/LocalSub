@@ -13,7 +13,7 @@ from app.services.model_manager import WHISPER_REGISTRY
 
 
 def test_pure_filler_detection():
-    # Vocalizations and moans
+    # Vocalizations and repetitive fillers
     assert is_pure_filler("Oh, yeah...") is True
     assert is_pure_filler("Oh my god!") is True
     assert is_pure_filler("Ah, ahh, ooh, mmm...") is True
@@ -89,3 +89,19 @@ def test_english_whisper_models_registry():
     small_spec = WHISPER_REGISTRY[WhisperModelSize.SMALL_EN.value]
     assert small_spec["repo_id"] == "Systran/faster-whisper-small.en"
     assert "model.bin" in small_spec["required_files"]
+
+
+def test_cpu_threads_options_discovery():
+    from app.core.config import get_available_cpu_thread_options, get_default_cpu_threads
+    import os
+
+    options = get_available_cpu_thread_options()
+    assert len(options) >= 1
+    total = os.cpu_count() or 4
+    # Max option must equal total detected cores
+    assert options[0][0] == total
+    assert "۱۰۰٪" in options[0][1]
+    # Options should be strictly descending
+    counts = [opt[0] for opt in options]
+    assert counts == sorted(counts, reverse=True)
+    assert get_default_cpu_threads() == total

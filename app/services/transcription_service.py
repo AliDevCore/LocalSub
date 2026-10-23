@@ -24,20 +24,27 @@ class TranscriptionService:
         self.model_manager = model_manager or ModelManager()
         self._loaded_model: Optional[WhisperModel] = None
         self._current_model_size: Optional[str] = None
+        self._current_cpu_threads: Optional[int] = None
 
     def load_model(
         self,
         model_size: str = WhisperModelSize.SMALL_EN.value,
-        cpu_threads: int = 2,
+        cpu_threads: Optional[int] = None,
         compute_type: str = "int8",
         progress_callback: Optional[Callable[[str, float], None]] = None,
         is_cancelled: Optional[Callable[[], bool]] = None,
     ) -> WhisperModel:
         """
         Load WhisperModel on CPU. Automatically downloads model if not present.
-        Caches loaded model instance if size matches.
+        Caches loaded model instance if size and thread count match.
         """
-        if self._loaded_model is not None and self._current_model_size == model_size:
+        effective_threads = int(cpu_threads) if cpu_threads is not None else (os.cpu_count() or 4)
+
+        if (
+            self._loaded_model is not None
+            and self._current_model_size == model_size
+            and self._current_cpu_threads == effective_threads
+        ):
             return self._loaded_model
 
         # Ensure model is ready locally
@@ -52,10 +59,10 @@ class TranscriptionService:
 
         model_path = self.model_manager.get_whisper_model_path(model_size)
         get_logger().info(
-            f"Loading Whisper model '{model_size}' from '{model_path}' on CPU (threads={cpu_threads}, compute_type={compute_type})..."
+            f"Loading Whisper model '{model_size}' from '{model_path}' on CPU (threads={effective_threads}, compute_type={compute_type})..."
         )
 
-        # Release existing model if switching sizes
+        # Release existing model if switching sizes or threads
         self.unload_model()
 
         if is_cancelled and is_cancelled():
@@ -69,10 +76,11 @@ class TranscriptionService:
                 model_size_or_path=str(model_path),
                 device="cpu",
                 compute_type=compute_type,
-                cpu_threads=cpu_threads,
+                cpu_threads=effective_threads,
             )
             self._current_model_size = model_size
-            get_logger().info(f"Whisper model '{model_size}' loaded successfully.")
+            self._current_cpu_threads = effective_threads
+            get_logger().info(f"Whisper model '{model_size}' loaded successfully (threads={effective_threads}).")
             return self._loaded_model
         except Exception as e:
             get_logger().error(f"Failed to load Whisper model from '{model_path}': {e}")
@@ -85,6 +93,7 @@ class TranscriptionService:
             del self._loaded_model
             self._loaded_model = None
             self._current_model_size = None
+            self._current_cpu_threads = None
             gc.collect()
 
     def transcribe_audio(
@@ -92,7 +101,7 @@ class TranscriptionService:
         audio_path: Path,
         duration_seconds: Optional[float] = None,
         model_size: str = WhisperModelSize.SMALL_EN.value,
-        cpu_threads: int = 2,
+        cpu_threads: Optional[int] = None,
         compute_type: str = "int8",
         progress_callback: Optional[Callable[[str, float], None]] = None,
         is_cancelled: Optional[Callable[[], bool]] = None,
@@ -105,23 +114,25 @@ class TranscriptionService:
         if not audio_path.is_file():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
+        effective_threads = int(cpu_threads) if cpu_threads is not None else (os.cpu_count() or 4)
+
         model = self.load_model(
             model_size=model_size,
-            cpu_threads=cpu_threads,
+            cpu_threads=effective_threads,
             compute_type=compute_type,
             progress_callback=progress_callback,
             is_cancelled=is_cancelled,
         )
 
-        get_logger().info(f"Starting speech transcription for '{audio_path.name}' (language='en').")
+        get_logger().info(f"Starting speech transcription for '{audio_path.name}' (language='en', threads={effective_threads}).")
         if progress_callback:
             progress_callback("Transcribing speech with faster-whisper...", 5.0)
 
-        # Transcribe optimized for speed and preventing repetition/hallucination loops:
-        # - beam_size=2: Fast decoding while maintaining high English accuracy
-        # - word_timestamps=False: Skips CPU-intensive DTW token alignment (segment start/end is used)
-        # - condition_on_previous_text=False: Prevents cross-window repetition hallucinations on moans/groans/music
-        # - vad_filter=True: Drops non-speech silent segments
+        # Fast and accurate speech transcription:
+        # - beam_size=2: Fast search space evaluation with high English accuracy
+        # - word_timestamps=False: High inference speed without token-level DTW alignment overhead
+        # - condition_on_previous_text=True: Ensures rapid context-aware decoding across 30s windows
+        # - vad_filter=True: Skips non-speech audio segments using Silero VAD
         segments_generator, info = model.transcribe(
             str(audio_path),
             language="en",
@@ -130,7 +141,7 @@ class TranscriptionService:
             word_timestamps=False,
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=500),
-            condition_on_previous_text=False,
+            condition_on_previous_text=True,
         )
 
         # Check detected language confidence

@@ -1,7 +1,6 @@
 """
 LocalSub - Filler Words and Vocalization Filter.
-Identifies, cleans, or discards non-speech vocalizations and filler expressions
-frequently occurring in adult films, moans, or repetitive audio artifacts
+Identifies, cleans, or discards non-speech vocalizations and repetitive filler expressions
 (e.g., 'oh my god', 'oh yeah', 'yes', 'no', 'ah', 'ahh', 'mmm', 'fuck').
 """
 
@@ -12,7 +11,7 @@ from typing import List
 
 from app.core.types import SubtitleSegment
 
-# Comprehensive list of adult and dialogue vocalization / filler phrases
+# Comprehensive list of dialogue vocalizations and filler phrases
 FILLER_PHRASES: List[str] = [
     # Multi-word compound expressions
     r"oh\s+my\s+god",
@@ -105,7 +104,7 @@ def clean_sentence_fillers(text: str) -> str:
 def filter_filler_segments(segments: List[SubtitleSegment]) -> List[SubtitleSegment]:
     """
     Filter a list of SubtitleSegment instances:
-    1. Removes segments that consist purely of filler/groan words.
+    1. Removes segments that consist purely of filler words and vocalizations.
     2. Cleans leading and trailing filler vocalizations from remaining dialogue segments.
     3. Re-indexes remaining segments sequentially starting from 1.
     """

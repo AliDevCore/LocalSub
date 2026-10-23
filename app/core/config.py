@@ -10,7 +10,7 @@ import os
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from app.core.types import TargetLanguage, TranslationModelType, WhisperModelSize
 
@@ -108,9 +108,42 @@ def get_asset_path(filename: str) -> Path:
 
 
 def get_default_cpu_threads() -> int:
-    """Return safe number of CPU threads avoiding thermal throttling on low-power / dual-core CPUs."""
-    count = os.cpu_count() or 4
-    return max(1, min(count // 2, 4))
+    """Return default CPU threads (uses full system cores by default for maximum performance)."""
+    return os.cpu_count() or 4
+
+
+def get_available_cpu_thread_options() -> List[Tuple[int, str]]:
+    """
+    Dynamically discover system CPU cores and return user-selectable options.
+    Works dynamically for any core count (2, 4, 8, 16, 32, 64+ cores).
+    """
+    total = os.cpu_count() or 4
+    if total <= 8:
+        counts = list(range(total, 0, -1))
+    elif total <= 16:
+        counts = sorted(list(set([total, 14, 12, 10, 8, 6, 4, 2, 1])), reverse=True)
+        counts = [c for c in counts if c <= total]
+    else:
+        counts = sorted(
+            list(set([total, int(total * 0.75), total // 2, max(4, total // 4), 8, 4, 2, 1])),
+            reverse=True,
+        )
+        counts = [c for c in counts if c <= total]
+
+    options: List[Tuple[int, str]] = []
+    for count in counts:
+        pct = int(round((count / total) * 100))
+        if count == total:
+            label = f"{count} هسته (حداکثر توان / ۱۰۰٪)"
+        elif pct >= 75:
+            label = f"{count} هسته (توان بالا / {pct}٪)"
+        elif pct >= 50:
+            label = f"{count} هسته (متعادل / {pct}٪)"
+        else:
+            label = f"{count} هسته (حالت سبک / {pct}٪)"
+        options.append((count, label))
+
+    return options
 
 
 @dataclass
